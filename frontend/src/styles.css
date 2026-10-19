@@ -920,3 +920,140 @@ a.button {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- Step 7: page reading ---------- */
+
+.facts-wide {
+  grid-column: 1 / -1;
+}
+
+.type-chips .tag {
+  margin: 0 6px 4px 0;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.viewer.with-panel {
+  grid-template-columns: 112px minmax(0, 1fr) 320px;
+}
+
+.thumb-group {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 6px 0 4px;
+  line-height: 1.2;
+}
+
+.thumb span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.qdot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.q-good {
+  background: #2da44e;
+}
+
+.q-fair {
+  background: #bf8700;
+}
+
+.q-poor,
+.q-unreadable {
+  background: var(--bad);
+}
+
+.q-blank {
+  background: #8c959f;
+}
+
+.page-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.page-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.type-select {
+  font-weight: 600;
+  padding: 4px 8px;
+}
+
+.quality-tag {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+}
+
+.button.pressed {
+  background: var(--sidebar);
+  color: #fff;
+  border-color: var(--sidebar);
+}
+
+.page-canvas {
+  position: relative;
+}
+
+.word-box {
+  position: absolute;
+  border: 1px solid rgba(31, 111, 235, 0.55);
+  background: rgba(31, 111, 235, 0.08);
+  pointer-events: auto;
+}
+
+.word-box.low {
+  border-color: rgba(198, 40, 40, 0.8);
+  background: rgba(198, 40, 40, 0.12);
+}
+
+.text-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  max-height: 85vh;
+  overflow: auto;
+}
+
+.text-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.page-text {
+  white-space: pre-wrap;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+@media (max-width: 1100px) {
+  .viewer.with-panel {
+    grid-template-columns: 112px minmax(0, 1fr);
+  }
+
+  .viewer.with-panel .text-panel {
+    grid-column: 1 / -1;
+  }
+}

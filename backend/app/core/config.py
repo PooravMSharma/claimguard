@@ -33,7 +33,13 @@ class Settings(BaseSettings):
     max_claim_bytes: int = 100 * 1024 * 1024
     max_claim_pages: int = 150
     max_files_per_claim: int = 40
-    page_image_scale: float = 2.0  # page images at ~144 dpi for OCR and the viewer
+    page_image_scale: float = 2.0  # page images at ~144 dpi for the viewer
+
+    # Page reading (Step 7)
+    ocr_languages: str = "eng+hin"   # Tesseract languages; missing ones are skipped
+    ocr_render_scale: float = 3.0    # PDF pages are rendered at ~216 dpi for OCR
+    ocr_min_width: int = 1800        # smaller photos/scans are enlarged to this width before OCR
+    ocr_workers: int = 3             # pages read in parallel
 
     cors_origins: list[str] = ["http://localhost:5173"]
 

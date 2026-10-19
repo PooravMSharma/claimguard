@@ -4,6 +4,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
+from app.models.enums import DocumentType
+
 
 class PageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -16,6 +18,10 @@ class PageOut(BaseModel):
     height: int | None
     has_text_layer: bool
     image_hash: str | None
+    text_source: str | None
+    ocr_confidence: float | None
+    quality_flag: str | None
+    rotation: int
 
 
 class DocumentOut(BaseModel):
@@ -50,10 +56,27 @@ class ClaimRow(BaseModel):
     processing_error: str | None
 
 
+class PageText(BaseModel):
+    id: uuid.UUID
+    page_number: int
+    doc_type: str
+    text_source: str | None
+    ocr_confidence: float | None
+    quality_flag: str | None
+    text: str
+    words: list[list]   # [text, confidence, x0, y0, x1, y1] with boxes as fractions of the page
+
+
+class PageTypeUpdate(BaseModel):
+    doc_type: DocumentType
+
+
 class ClaimDetail(ClaimRow):
     created_by: str | None
     processing_started_at: datetime | None
     processing_finished_at: datetime | None
+    pages_needing_review: int
+    page_types: dict[str, int]
     files: list[DocumentOut]
 
 

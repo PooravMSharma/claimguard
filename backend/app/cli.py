@@ -13,6 +13,8 @@ Reference data:
 
 Synthetic claims (after python -m app.synthetic):
     docker compose exec backend python -m app.cli import-synthetic --limit 50
+    docker compose exec backend python -m app.cli import-synthetic --limit 20 --scanned
+    docker compose exec backend python -m app.cli evaluate-reading
 """
 
 import argparse
@@ -105,23 +107,27 @@ def import_synthetic(folder: Path, limit: int | None, scanned: bool, now: bool) 
     if not manifest.exists():
         print(f"Error: {manifest} not found. Run: python -m app.synthetic", file=sys.stderr)
         sys.exit(1)
-    rows = list(csv.DictReader(open(manifest)))[: limit or None]
+    rows = list(csv.DictReader(open(manifest)))
+    if scanned:  # only claims that have a scanned copy; stored as e.g. CG-SYN-0001-S next to the clean one
+        rows = [r for r in rows if r.get("scanned") == "True"]
+    rows = rows[: limit or None]
     created = skipped = 0
     with SessionLocal() as db:
         for row in rows:
             claim_id = row["claim_id"]
-            if db.scalar(select(Claim.id).where(Claim.claim_number == claim_id)):
+            number = f"{claim_id}-S" if scanned else claim_id
+            if db.scalar(select(Claim.id).where(Claim.claim_number == number)):
                 skipped += 1
                 continue
             claim_dir = folder / "claims" / claim_id
             truth = json.loads((claim_dir / "ground_truth.json").read_text())
-            pdf = claim_dir / ("scanned.pdf" if scanned and (claim_dir / "scanned.pdf").exists() else "claim.pdf")
+            pdf = claim_dir / ("scanned.pdf" if scanned else "claim.pdf")
             result = intake.create_claim(
-                db, [intake.IncomingFile(f"{claim_id}.pdf", pdf.read_bytes())], stage=ClaimStage(truth["stage"]),
-                claim_number=claim_id, source="synthetic",
+                db, [intake.IncomingFile(f"{number}.pdf", pdf.read_bytes())], stage=ClaimStage(truth["stage"]),
+                claim_number=number, source="synthetic",
             )
             log_event(db, "claim.created", entity_type="claim", entity_id=result.claim.id,
-                      details={"claim_number": claim_id, "via": "cli import-synthetic", "file": pdf.name})
+                      details={"claim_number": number, "via": "cli import-synthetic", "file": pdf.name})
             db.commit()
             if now:
                 run_pipeline(db, result.claim.id)
@@ -172,8 +178,11 @@ def main(argv: list[str] | None = None) -> None:
     syn = sub.add_parser("import-synthetic", help="Import generated synthetic claims as claims to process")
     syn.add_argument("--folder", type=Path, default=Path(__file__).resolve().parents[1] / "synthetic_data")
     syn.add_argument("--limit", type=int, help="Import only the first N claims")
-    syn.add_argument("--scanned", action="store_true", help="Use the scanned copy where one exists")
+    syn.add_argument("--scanned", action="store_true",
+                     help="Import the scanned copies instead (as CG-SYN-xxxx-S), for testing OCR")
     syn.add_argument("--now", action="store_true", help="Process here instead of in the worker")
+    ev = sub.add_parser("evaluate-reading", help="Score page types and OCR on imported synthetic claims")
+    ev.add_argument("--folder", type=Path, default=Path(__file__).resolve().parents[1] / "synthetic_data")
     args = parser.parse_args(argv)
 
     if args.command == "load-reference-defaults":
@@ -188,6 +197,11 @@ def main(argv: list[str] | None = None) -> None:
         reference_status()
     elif args.command == "import-synthetic":
         import_synthetic(args.folder, args.limit, args.scanned, args.now)
+    elif args.command == "evaluate-reading":
+        from app.pipeline.evaluate import evaluate, report
+
+        with SessionLocal() as db:
+            print(report(evaluate(db, args.folder)))
 
     if args.command == "create-admin":
         password = sys.stdin.readline().rstrip("\n") if args.password_stdin else _ask_password()

@@ -16,6 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -172,6 +173,13 @@ class DocumentPage(Base):
     quality_score: Mapped[float | None] = mapped_column(Float)
     image_key: Mapped[str | None] = mapped_column(String(500))
     image_hash: Mapped[str | None] = mapped_column(String(64), index=True)
+    # Step 7: how the text was obtained and how readable the page is
+    text_source: Mapped[str | None] = mapped_column(String(20))  # text_layer | ocr | none
+    ocr_confidence: Mapped[float | None] = mapped_column(Float)  # 0-1, mean word confidence
+    quality_flag: Mapped[str | None] = mapped_column(String(20))  # good | fair | poor | unreadable | blank
+    rotation: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # degrees turned before OCR
+    # Words with boxes as fractions of the page: [[text, confidence, x0, y0, x1, y1], ...]
+    words: Mapped[list | None] = mapped_column(JSONB)
     width: Mapped[int | None] = mapped_column(Integer)
     height: Mapped[int | None] = mapped_column(Integer)
     has_text_layer: Mapped[bool] = mapped_column(default=False, server_default="false")

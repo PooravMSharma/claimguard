@@ -14,7 +14,15 @@ from app.db.session import get_db
 from app.models.claim import Claim, ClaimDocument, DocumentPage
 from app.models.enums import ClaimStage, ClaimStatus
 from app.models.user import User
-from app.schemas.claims import ClaimDetail, ClaimPage, ClaimRow, DocumentOut, UploadResult
+from app.schemas.claims import (
+    ClaimDetail,
+    ClaimPage,
+    ClaimRow,
+    DocumentOut,
+    PageText,
+    PageTypeUpdate,
+    UploadResult,
+)
 from app.services import intake
 from app.services.audit import log_event
 from app.services.storage import StorageError
@@ -22,6 +30,8 @@ from app.services.storage import StorageError
 router = APIRouter(prefix="/claims", tags=["claims"])
 can_view = require_permission(Permission.CLAIMS_VIEW)
 can_upload = require_permission(Permission.CLAIMS_UPLOAD)
+can_review = require_permission(Permission.CLAIMS_REVIEW)
+NEEDS_REVIEW = ("poor", "unreadable")
 
 CHUNK = 1024 * 1024
 
@@ -48,12 +58,27 @@ def _detail(db: Session, claim_id: uuid.UUID) -> ClaimDetail:
         raise HTTPException(status_code=404, detail="Claim not found")
     files = sorted(claim.documents, key=lambda d: d.uploaded_at)
     creator = db.get(User, claim.created_by_id) if claim.created_by_id else None
+    pages = [p for d in files for p in d.pages]
+    types: dict[str, int] = {}
+    for p in pages:
+        key = _value(p.doc_type) or "unknown"
+        types[key] = types.get(key, 0) + 1
     return ClaimDetail(
         **_row(claim, len(files), sum(d.page_count or 0 for d in files)),
         created_by=creator.full_name if creator else None,
         processing_started_at=claim.processing_started_at, processing_finished_at=claim.processing_finished_at,
+        pages_needing_review=sum(1 for p in pages if p.quality_flag in NEEDS_REVIEW),
+        page_types=types,
         files=[DocumentOut.model_validate(d) for d in files],
     )
+
+
+def _page(db: Session, claim_id: uuid.UUID, page_id: uuid.UUID) -> DocumentPage:
+    page = db.scalar(select(DocumentPage).join(ClaimDocument)
+                     .where(DocumentPage.id == page_id, ClaimDocument.claim_id == claim_id))
+    if page is None:
+        raise HTTPException(status_code=404, detail="Page not found")
+    return page
 
 
 async def _read_uploads(files: list[UploadFile]) -> list[intake.IncomingFile]:
@@ -149,15 +174,37 @@ def get_claim(claim_id: uuid.UUID, db: Session = Depends(get_db), _: User = Depe
 @router.get("/{claim_id}/pages/{page_id}/image")
 def page_image(claim_id: uuid.UUID, page_id: uuid.UUID, db: Session = Depends(get_db),
                _: User = Depends(can_view)) -> Response:
-    page = db.scalar(select(DocumentPage).join(ClaimDocument)
-                     .where(DocumentPage.id == page_id, ClaimDocument.claim_id == claim_id))
-    if page is None or not page.image_key:
-        raise HTTPException(status_code=404, detail="Page not found")
+    page = _page(db, claim_id, page_id)
+    if not page.image_key:
+        raise HTTPException(status_code=404, detail="Page image not available")
     try:
         data = intake.storage().get(page.image_key)
     except StorageError:
         raise HTTPException(status_code=404, detail="Page image missing; reprocess the claim")
     return Response(data, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
+
+
+@router.get("/{claim_id}/pages/{page_id}/text", response_model=PageText)
+def page_text(claim_id: uuid.UUID, page_id: uuid.UUID, db: Session = Depends(get_db),
+              _: User = Depends(can_view)) -> PageText:
+    page = _page(db, claim_id, page_id)
+    return PageText(id=page.id, page_number=page.page_number, doc_type=_value(page.doc_type) or "unknown",
+                    text_source=page.text_source, ocr_confidence=page.ocr_confidence,
+                    quality_flag=page.quality_flag, text=page.ocr_text or "", words=page.words or [])
+
+
+@router.patch("/{claim_id}/pages/{page_id}", response_model=ClaimDetail)
+def set_page_type(claim_id: uuid.UUID, page_id: uuid.UUID, body: PageTypeUpdate, request: Request,
+                  db: Session = Depends(get_db), user: User = Depends(can_review)) -> ClaimDetail:
+    """A reviewer corrects a page's document type. (Reprocessing the claim classifies pages again.)"""
+    page = _page(db, claim_id, page_id)
+    before = _value(page.doc_type)
+    page.doc_type = body.doc_type
+    page.doc_type_confidence = 1.0
+    log_event(db, "page.type_changed", entity_type="document_page", entity_id=page.id, user_id=user.id,
+              request=request, details={"claim_id": str(claim_id), "from": before, "to": body.doc_type.value})
+    db.commit()
+    return _detail(db, claim_id)
 
 
 @router.get("/{claim_id}/documents/{document_id}/original")

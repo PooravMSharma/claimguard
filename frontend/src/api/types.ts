@@ -238,6 +238,10 @@ export interface ClaimPageItem {
   height: number | null;
   has_text_layer: boolean;
   image_hash: string | null;
+  text_source: "text_layer" | "ocr" | "none" | null;
+  ocr_confidence: number | null;
+  quality_flag: QualityFlag | null;
+  rotation: number;
 }
 
 export interface ClaimFile {
@@ -256,7 +260,55 @@ export interface ClaimDetail extends ClaimRow {
   created_by: string | null;
   processing_started_at: string | null;
   processing_finished_at: string | null;
+  pages_needing_review: number;
+  page_types: Record<string, number>;
   files: ClaimFile[];
+}
+
+// ---------- Step 7: page reading ----------
+
+export type QualityFlag = "good" | "fair" | "poor" | "unreadable" | "blank";
+
+export const DOC_TYPE_LABELS: Record<string, string> = {
+  claim_form: "Claim form",
+  preauth_form: "Pre-auth form",
+  preauth_approval: "Pre-auth approval",
+  discharge_summary: "Discharge summary",
+  final_bill: "Final bill",
+  bill_breakup: "Bill breakup",
+  pharmacy_bill: "Pharmacy bill",
+  lab_report: "Lab report",
+  imaging_report: "Imaging report",
+  ot_notes: "OT notes",
+  anaesthesia_notes: "Anaesthesia notes",
+  implant_invoice: "Implant invoice",
+  implant_sticker: "Implant sticker",
+  case_sheet: "Case sheet",
+  nursing_chart: "Nursing chart",
+  policy_copy: "Policy / e-card",
+  id_proof: "ID proof",
+  mlc_fir: "MLC / FIR",
+  other: "Other",
+  unknown: "Unknown",
+};
+
+export const QUALITY_LABELS: Record<QualityFlag, string> = {
+  good: "Clear",
+  fair: "Readable",
+  poor: "Poor scan",
+  unreadable: "Unreadable",
+  blank: "Blank",
+};
+
+export interface PageText {
+  id: string;
+  page_number: number;
+  doc_type: string;
+  text_source: string | null;
+  ocr_confidence: number | null;
+  quality_flag: QualityFlag | null;
+  text: string;
+  words: [string, number, number, number, number, number][];
 }
 
 export interface ClaimList {

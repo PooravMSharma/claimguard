@@ -70,6 +70,7 @@ class DocumentType(str, enum.Enum):
     OT_NOTES = "ot_notes"
     ANAESTHESIA_NOTES = "anaesthesia_notes"
     IMPLANT_INVOICE = "implant_invoice"
+    IMPLANT_STICKER = "implant_sticker"
     CASE_SHEET = "case_sheet"
     NURSING_CHART = "nursing_chart"
     POLICY_COPY = "policy_copy"

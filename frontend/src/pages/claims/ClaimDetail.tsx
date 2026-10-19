@@ -1,18 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
 import { api } from "../../api/client";
-import { STAGE_LABELS, type ClaimDetail as Detail } from "../../api/types";
+import { DOC_TYPE_LABELS, STAGE_LABELS, type ClaimDetail as Detail } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import { ACTIVE, StatusTag, fileSize, seconds, when } from "./common";
-
-interface FlatPage {
-  id: string;
-  fileId: string;
-  filename: string;
-  pageNumber: number;
-  hasText: boolean;
-}
+import PageViewer from "./PageViewer";
 
 export default function ClaimDetail() {
   const { id } = useParams<{ id: string }>();
@@ -20,7 +13,6 @@ export default function ClaimDetail() {
   const { can } = useAuth();
   const [claim, setClaim] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState(false);
   const warnings = (location.state as { warnings?: string[] } | null)?.warnings ?? [];
 
@@ -43,25 +35,6 @@ export default function ClaimDetail() {
     const timer = setInterval(load, 2500);
     return () => clearInterval(timer);
   }, [active, load]);
-
-  const pages: FlatPage[] = useMemo(
-    () =>
-      (claim?.files ?? []).flatMap((f) =>
-        f.pages.map((p) => ({ id: p.id, fileId: f.id, filename: f.filename, pageNumber: p.page_number, hasText: p.has_text_layer })),
-      ),
-    [claim],
-  );
-  const current = pages[Math.min(selected, Math.max(pages.length - 1, 0))];
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === "INPUT") return;
-      if (e.key === "ArrowRight") setSelected((s) => Math.min(s + 1, pages.length - 1));
-      if (e.key === "ArrowLeft") setSelected((s) => Math.max(s - 1, 0));
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [pages.length]);
 
   const reprocess = async () => {
     setBusy(true);
@@ -109,6 +82,12 @@ export default function ClaimDetail() {
           <strong>Processing failed.</strong> {claim.processing_error}
         </div>
       )}
+      {claim.status === "ready_for_review" && claim.pages_needing_review > 0 && (
+        <p className="notice-warn">
+          {claim.pages_needing_review} page{claim.pages_needing_review === 1 ? " is" : "s are"} a poor scan. Values read
+          from {claim.pages_needing_review === 1 ? "it" : "them"} will be marked for confirmation.
+        </p>
+      )}
       {active && (
         <div className="card notice-info">
           <strong>{claim.status === "received" ? "Waiting in the queue…" : "Processing…"}</strong> Pages appear here
@@ -141,6 +120,21 @@ export default function ClaimDetail() {
             <dt>Files</dt>
             <dd>
               {claim.documents} · {claim.pages} pages
+            </dd>
+          </div>
+          <div className="facts-wide">
+            <dt>Documents found</dt>
+            <dd className="type-chips">
+              {Object.entries(claim.page_types).length === 0
+                ? "—"
+                : Object.entries(claim.page_types)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([t, n]) => (
+                      <span key={t} className={`tag ${t === "unknown" ? "tag-bad" : ""}`}>
+                        {DOC_TYPE_LABELS[t] ?? t}
+                        {n > 1 ? ` ×${n}` : ""}
+                      </span>
+                    ))}
             </dd>
           </div>
           <div>
@@ -186,42 +180,7 @@ export default function ClaimDetail() {
         </table>
       </div>
 
-      {pages.length > 0 && current && (
-        <div className="viewer">
-          <div className="thumbs" aria-label="Pages">
-            {pages.map((p, i) => (
-              <button
-                key={p.id}
-                className={i === selected ? "thumb active" : "thumb"}
-                onClick={() => setSelected(i)}
-                title={`${p.filename}, page ${p.pageNumber}`}
-              >
-                <img src={`/api/claims/${claim.id}/pages/${p.id}/image`} alt="" loading="lazy" />
-                <span>{i + 1}</span>
-              </button>
-            ))}
-          </div>
-          <div className="page-view">
-            <div className="page-bar">
-              <button className="button button-quiet" disabled={selected === 0} onClick={() => setSelected(selected - 1)}>
-                ‹ Prev
-              </button>
-              <span className="muted">
-                Page {selected + 1} of {pages.length} · {current.filename}, p. {current.pageNumber}
-                {current.hasText ? " · has text layer" : " · image only (needs OCR)"}
-              </span>
-              <button
-                className="button button-quiet"
-                disabled={selected >= pages.length - 1}
-                onClick={() => setSelected(selected + 1)}
-              >
-                Next ›
-              </button>
-            </div>
-            <img className="page-img" src={`/api/claims/${claim.id}/pages/${current.id}/image`} alt={`Page ${selected + 1}`} />
-          </div>
-        </div>
-      )}
+      <PageViewer claim={claim} canEditType={can("claims.review")} onChanged={setClaim} />
     </section>
   );
 }
