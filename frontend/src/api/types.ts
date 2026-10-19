@@ -190,3 +190,84 @@ export interface PolicyTermRow {
   description: string | null;
   source: string | null;
 }
+
+// ---------- Step 6: claims ----------
+
+export type ClaimStatus = "received" | "processing" | "ready_for_review" | "in_review" | "decided" | "failed";
+export type ClaimStage = "preauth" | "final_cashless" | "reimbursement";
+
+export const STATUS_LABELS: Record<ClaimStatus, string> = {
+  received: "Received",
+  processing: "Processing",
+  ready_for_review: "Ready for review",
+  in_review: "In review",
+  decided: "Decided",
+  failed: "Failed",
+};
+
+export const STAGE_LABELS: Record<ClaimStage, string> = {
+  preauth: "Pre-authorisation",
+  final_cashless: "Final cashless",
+  reimbursement: "Reimbursement",
+};
+
+export interface ClaimRow {
+  id: string;
+  claim_number: string;
+  stage: ClaimStage;
+  status: ClaimStatus;
+  source: "upload" | "synthetic";
+  policy_number: string | null;
+  member_name: string | null;
+  hospital_name: string | null;
+  claimed_amount: string | null;
+  risk_band: "green" | "amber" | "red" | null;
+  risk_score: number | null;
+  documents: number;
+  pages: number;
+  created_at: string;
+  processing_error: string | null;
+}
+
+export interface ClaimPageItem {
+  id: string;
+  page_number: number;
+  doc_type: string;
+  doc_type_confidence: number | null;
+  width: number | null;
+  height: number | null;
+  has_text_layer: boolean;
+  image_hash: string | null;
+}
+
+export interface ClaimFile {
+  id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  sha256: string;
+  page_count: number | null;
+  uploaded_at: string;
+  duplicate_of_id: string | null;
+  pages: ClaimPageItem[];
+}
+
+export interface ClaimDetail extends ClaimRow {
+  created_by: string | null;
+  processing_started_at: string | null;
+  processing_finished_at: string | null;
+  files: ClaimFile[];
+}
+
+export interface ClaimList {
+  items: ClaimRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  counts: Partial<Record<ClaimStatus, number>>;
+}
+
+export interface UploadResult {
+  claim: ClaimDetail;
+  warnings: string[];
+}

@@ -87,6 +87,10 @@ class Claim(TimestampMixin, Base):
     created_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     sla_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     processing_error: Mapped[str | None] = mapped_column(Text)
+    processing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    processing_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # "upload" for files sent through the app, "synthetic" for generated test claims
+    source: Mapped[str] = mapped_column(String(20), default="upload", server_default="upload")
 
     documents: Mapped[list["ClaimDocument"]] = relationship(
         back_populates="claim", cascade="all, delete-orphan", passive_deletes=True
@@ -132,6 +136,10 @@ class ClaimDocument(Base):
     page_count: Mapped[int | None] = mapped_column(Integer)
     uploaded_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Same file (same SHA-256) already uploaded with another claim: a reuse signal for fraud review
+    duplicate_of_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("claim_documents.id", ondelete="SET NULL")
+    )
 
     claim: Mapped[Claim] = relationship(back_populates="documents")
     pages: Mapped[list["DocumentPage"]] = relationship(
@@ -164,5 +172,8 @@ class DocumentPage(Base):
     quality_score: Mapped[float | None] = mapped_column(Float)
     image_key: Mapped[str | None] = mapped_column(String(500))
     image_hash: Mapped[str | None] = mapped_column(String(64), index=True)
+    width: Mapped[int | None] = mapped_column(Integer)
+    height: Mapped[int | None] = mapped_column(Integer)
+    has_text_layer: Mapped[bool] = mapped_column(default=False, server_default="false")
 
     document: Mapped[ClaimDocument] = relationship(back_populates="pages")

@@ -4,6 +4,9 @@ import RequireAuth from "./auth/RequireAuth";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Placeholder from "./pages/Placeholder";
+import ClaimDetail from "./pages/claims/ClaimDetail";
+import ClaimQueue from "./pages/claims/ClaimQueue";
+import UploadClaim from "./pages/claims/UploadClaim";
 import ReferenceData from "./pages/reference/ReferenceData";
 import SystemStatus from "./pages/SystemStatus";
 import AuditLog from "./pages/admin/AuditLog";
@@ -25,7 +28,15 @@ export default function App() {
           path="/claims"
           element={
             <RequireAuth permission="claims.view">
-              <Placeholder title="Claim queue" note="Built in Step 11." />
+              <ClaimQueue />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/claims/:id"
+          element={
+            <RequireAuth permission="claims.view">
+              <ClaimDetail />
             </RequireAuth>
           }
         />
@@ -33,7 +44,7 @@ export default function App() {
           path="/upload"
           element={
             <RequireAuth permission="claims.upload">
-              <Placeholder title="Upload claim" note="Built in Step 6." />
+              <UploadClaim />
             </RequireAuth>
           }
         />

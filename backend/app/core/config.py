@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     s3_secret_key: str = ""
     s3_region: str = "ap-south-1"
 
+    # Claim intake limits (PRD: up to 150 pages and 100 MB per claim)
+    max_claim_bytes: int = 100 * 1024 * 1024
+    max_claim_pages: int = 150
+    max_files_per_claim: int = 40
+    page_image_scale: float = 2.0  # page images at ~144 dpi for OCR and the viewer
+
     cors_origins: list[str] = ["http://localhost:5173"]
 
     ai_provider: str = ""

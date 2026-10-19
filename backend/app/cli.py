@@ -10,6 +10,9 @@ Reference data:
     docker compose exec backend python -m app.cli import-packages --file reference_data/raw/hbp.xlsx \
         --version HBP2022 --effective-from 2022-04-01 --source-name "NHA HBP 2022"
     docker compose exec backend python -m app.cli reference-status
+
+Synthetic claims (after python -m app.synthetic):
+    docker compose exec backend python -m app.cli import-synthetic --limit 50
 """
 
 import argparse
@@ -86,6 +89,51 @@ def reference_status() -> None:
             print(f"  {label:<26} {rows:>7} rows   {when}")
 
 
+def import_synthetic(folder: Path, limit: int | None, scanned: bool, now: bool) -> None:
+    """Load generated claim files through the normal intake path (same checks, storage and queue)."""
+    import csv
+    import json
+
+    from sqlalchemy import select
+
+    from app.models.claim import Claim
+    from app.models.enums import ClaimStage
+    from app.pipeline.runner import run_pipeline
+    from app.services import intake
+
+    manifest = folder / "manifest.csv"
+    if not manifest.exists():
+        print(f"Error: {manifest} not found. Run: python -m app.synthetic", file=sys.stderr)
+        sys.exit(1)
+    rows = list(csv.DictReader(open(manifest)))[: limit or None]
+    created = skipped = 0
+    with SessionLocal() as db:
+        for row in rows:
+            claim_id = row["claim_id"]
+            if db.scalar(select(Claim.id).where(Claim.claim_number == claim_id)):
+                skipped += 1
+                continue
+            claim_dir = folder / "claims" / claim_id
+            truth = json.loads((claim_dir / "ground_truth.json").read_text())
+            pdf = claim_dir / ("scanned.pdf" if scanned and (claim_dir / "scanned.pdf").exists() else "claim.pdf")
+            result = intake.create_claim(
+                db, [intake.IncomingFile(f"{claim_id}.pdf", pdf.read_bytes())], stage=ClaimStage(truth["stage"]),
+                claim_number=claim_id, source="synthetic",
+            )
+            log_event(db, "claim.created", entity_type="claim", entity_id=result.claim.id,
+                      details={"claim_number": claim_id, "via": "cli import-synthetic", "file": pdf.name})
+            db.commit()
+            if now:
+                run_pipeline(db, result.claim.id)
+            else:
+                intake.enqueue_processing(result.claim.id)
+            created += 1
+            if created % 25 == 0:
+                print(f"  {created} imported", flush=True)
+    action = "processed" if now else "queued for processing"
+    print(f"Done: {created} claims imported and {action}, {skipped} already there.")
+
+
 def _add_source_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--file", type=Path, required=True, help="CSV or Excel file")
     p.add_argument("--sheet", help="Excel sheet name (default: first sheet)")
@@ -120,6 +168,12 @@ def main(argv: list[str] | None = None) -> None:
                     help="Ward for rows that do not say (default semi_private)")
 
     sub.add_parser("reference-status", help="Show what reference data is loaded")
+
+    syn = sub.add_parser("import-synthetic", help="Import generated synthetic claims as claims to process")
+    syn.add_argument("--folder", type=Path, default=Path(__file__).resolve().parents[1] / "synthetic_data")
+    syn.add_argument("--limit", type=int, help="Import only the first N claims")
+    syn.add_argument("--scanned", action="store_true", help="Use the scanned copy where one exists")
+    syn.add_argument("--now", action="store_true", help="Process here instead of in the worker")
     args = parser.parse_args(argv)
 
     if args.command == "load-reference-defaults":
@@ -132,6 +186,8 @@ def main(argv: list[str] | None = None) -> None:
             default_tier=CityTier(args.city_tier), default_ward=WardType(args.ward))])
     elif args.command == "reference-status":
         reference_status()
+    elif args.command == "import-synthetic":
+        import_synthetic(args.folder, args.limit, args.scanned, args.now)
 
     if args.command == "create-admin":
         password = sys.stdin.readline().rstrip("\n") if args.password_stdin else _ask_password()
