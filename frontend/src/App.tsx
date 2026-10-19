@@ -4,6 +4,7 @@ import RequireAuth from "./auth/RequireAuth";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Placeholder from "./pages/Placeholder";
+import ReferenceData from "./pages/reference/ReferenceData";
 import SystemStatus from "./pages/SystemStatus";
 import AuditLog from "./pages/admin/AuditLog";
 import Users from "./pages/admin/Users";
@@ -33,6 +34,14 @@ export default function App() {
           element={
             <RequireAuth permission="claims.upload">
               <Placeholder title="Upload claim" note="Built in Step 6." />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/reference"
+          element={
+            <RequireAuth permission="reference.view">
+              <ReferenceData />
             </RequireAuth>
           }
         />

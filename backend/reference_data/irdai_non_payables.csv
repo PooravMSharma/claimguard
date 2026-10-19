@@ -1,0 +1,147 @@
+list_number,item_name,synonyms,notes
+1,BABY FOOD,,List I: not payable (some products may offer optional cover).
+1,BABY UTILITIES CHARGES,,List I: not payable (some products may offer optional cover).
+1,BEAUTY SERVICES,,List I: not payable (some products may offer optional cover).
+1,BELTS/ BRACES,,List I: not payable (some products may offer optional cover).
+1,BUDS,ear buds|cotton buds,List I: not payable (some products may offer optional cover).
+1,COLD PACK/HOT PACK,cold pack|hot pack|ice pack|hot water bag,List I: not payable (some products may offer optional cover).
+1,CARRY BAGS,,List I: not payable (some products may offer optional cover).
+1,EMAIL / INTERNET CHARGES,internet charges|wifi charges|wi-fi charges|email charges,List I: not payable (some products may offer optional cover).
+1,FOOD CHARGES (OTHER THAN PATIENT'S DIET PROVIDED BY HOSPITAL),attendant food|attendant diet|canteen charges|cafeteria,List I: not payable (some products may offer optional cover).
+1,LEGGINGS,,List I: not payable (some products may offer optional cover).
+1,LAUNDRY CHARGES,laundry|washing charges|linen washing,List I: not payable (some products may offer optional cover).
+1,MINERAL WATER,mineral water|packaged drinking water|water bottle|bisleri,List I: not payable (some products may offer optional cover).
+1,SANITARY PAD,sanitary pad|sanitary napkin|maternity pad|whisper,List I: not payable (some products may offer optional cover).
+1,TELEPHONE CHARGES,telephone|phone charges|std charges,List I: not payable (some products may offer optional cover).
+1,GUEST SERVICES,,List I: not payable (some products may offer optional cover).
+1,CREPE BANDAGE,crepe bandage|crepe,List I: not payable (some products may offer optional cover).
+1,DIAPER OF ANY TYPE,diaper|adult diaper|diapers|pampers,List I: not payable (some products may offer optional cover).
+1,EYELET COLLAR,,List I: not payable (some products may offer optional cover).
+1,SLINGS,,List I: not payable (some products may offer optional cover).
+1,BLOOD GROUPING AND CROSS-MATCHING OF DONOR SAMPLES,,List I: not payable (some products may offer optional cover).
+1,SERVICE CHARGES WHERE NURSING CHARGE ALSO CHARGED,service charge|service charges,List I: not payable (some products may offer optional cover). Only when nursing charges are also billed.
+1,TELEVISION CHARGES,television|tv charges|cable tv,List I: not payable (some products may offer optional cover).
+1,SURCHARGES,,List I: not payable (some products may offer optional cover).
+1,ATTENDANT CHARGES,attendant charges|attendant bed|attender charges,List I: not payable (some products may offer optional cover).
+1,EXTRA DIET OF PATIENT (OTHER THAN THAT WHICH FORMS PART OF BED CHARGE),,List I: not payable (some products may offer optional cover).
+1,BIRTH CERTIFICATE,,List I: not payable (some products may offer optional cover).
+1,CERTIFICATE CHARGES,,List I: not payable (some products may offer optional cover).
+1,COURIER CHARGES,,List I: not payable (some products may offer optional cover).
+1,CONVEYANCE CHARGES,,List I: not payable (some products may offer optional cover).
+1,MEDICAL CERTIFICATE,,List I: not payable (some products may offer optional cover).
+1,MEDICAL RECORDS,medical records charges|mrd charges|record charges,List I: not payable (some products may offer optional cover).
+1,PHOTOCOPIES CHARGES,photocopy|xerox|photocopies,List I: not payable (some products may offer optional cover).
+1,MORTUARY CHARGES,,List I: not payable (some products may offer optional cover).
+1,WALKING AIDS CHARGES,walker|walking stick|crutches|walking aid,List I: not payable (some products may offer optional cover).
+1,OXYGEN CYLINDER (FOR USAGE OUTSIDE THE HOSPITAL),,List I: not payable (some products may offer optional cover).
+1,SPACER,,List I: not payable (some products may offer optional cover).
+1,SPIROMETRE,spirometer|incentive spirometer|triflo|tri-flo,List I: not payable (some products may offer optional cover).
+1,NEBULIZER KIT,nebulizer kit|nebuliser kit,List I: not payable (some products may offer optional cover).
+1,STEAM INHALER,,List I: not payable (some products may offer optional cover).
+1,ARMSLING,arm sling|armsling|arm pouch,List I: not payable (some products may offer optional cover).
+1,THERMOMETER,thermometer|digital thermometer,List I: not payable (some products may offer optional cover).
+1,CERVICAL COLLAR,cervical collar|neck collar|philadelphia collar|soft collar,List I: not payable (some products may offer optional cover).
+1,SPLINT,,List I: not payable (some products may offer optional cover).
+1,DIABETIC FOOT WEAR,,List I: not payable (some products may offer optional cover).
+1,KNEE BRACES (LONG/ SHORT/ HINGED),knee brace|knee cap|hinged knee brace,List I: not payable (some products may offer optional cover).
+1,KNEE IMMOBILIZER/SHOULDER IMMOBILIZER,knee immobilizer|knee immobiliser|shoulder immobilizer|shoulder immobiliser,List I: not payable (some products may offer optional cover).
+1,LUMBO SACRAL BELT,lumbo sacral belt|ls belt|lumbar belt|back support belt,List I: not payable (some products may offer optional cover).
+1,"NIMBUS BED, WATER OR AIR BED CHARGES",air bed|water bed|nimbus bed|air mattress|alpha bed,List I: not payable (some products may offer optional cover).
+1,AMBULANCE COLLAR,,List I: not payable (some products may offer optional cover).
+1,AMBULANCE EQUIPMENT,,List I: not payable (some products may offer optional cover).
+1,ABDOMINAL BINDER,abdominal binder|abdominal belt,List I: not payable (some products may offer optional cover).
+1,PRIVATE NURSES CHARGES - SPECIAL NURSING CHARGES,special nursing|private nurse|private nursing,List I: not payable (some products may offer optional cover).
+1,SUGAR FREE TABLETS,sugar free|sugarfree,List I: not payable (some products may offer optional cover).
+1,"CREAMS, POWDERS, LOTIONS (TOILETRIES ARE NOT PAYABLE, ONLY PRESCRIBED MEDICAL PHARMACEUTICALS PAYABLE)",,List I: not payable (some products may offer optional cover).
+1,ECG ELECTRODES,ecg electrode|ecg electrodes,List I: not payable (some products may offer optional cover).
+1,GLOVES,gloves|glove|surgical gloves|examination gloves|sterile gloves,List I: not payable (some products may offer optional cover).
+1,NEBULISATION KIT,nebulisation kit|nebulization kit,List I: not payable (some products may offer optional cover).
+1,"ANY KIT WITH NO DETAILS MENTIONED (DELIVERY KIT, ORTHOKIT, RECOVERY KIT, ETC.)",delivery kit|ortho kit|orthokit|recovery kit,List I: not payable (some products may offer optional cover).
+1,KIDNEY TRAY,kidney tray,List I: not payable (some products may offer optional cover).
+1,MASK,mask|n95 mask|surgical mask,List I: not payable (some products may offer optional cover).
+1,OUNCE GLASS,,List I: not payable (some products may offer optional cover).
+1,OXYGEN MASK,oxygen mask|o2 mask|venturi mask|non rebreather mask,List I: not payable (some products may offer optional cover).
+1,PELVIC TRACTION BELT,pelvic traction belt|pelvic traction,List I: not payable (some products may offer optional cover).
+1,PAN CAN,,List I: not payable (some products may offer optional cover).
+1,TROLLY COVER,trolley cover|trolly cover,List I: not payable (some products may offer optional cover).
+1,"UROMETER, URINE JUG",urometer|urine jug,List I: not payable (some products may offer optional cover).
+1,AMBULANCE,,List I: not payable (some products may offer optional cover).
+1,VASOFIX SAFETY,vasofix,List I: not payable (some products may offer optional cover).
+2,BABY CHARGES (UNLESS SPECIFIED/INDICATED),,List II: part of room charges; not payable separately.
+2,HAND WASH,hand wash|handwash|hand rub,List II: part of room charges; not payable separately.
+2,SHOE COVER,shoe cover|shoe covers,List II: part of room charges; not payable separately.
+2,CAPS,surgical cap|bouffant cap|head cap,List II: part of room charges; not payable separately.
+2,CRADLE CHARGES,,List II: part of room charges; not payable separately.
+2,COMB,,List II: part of room charges; not payable separately.
+2,EAU-DE-COLOGNE / ROOM FRESHNERS,,List II: part of room charges; not payable separately.
+2,FOOT COVER,foot cover,List II: part of room charges; not payable separately.
+2,GOWN,gown|patient gown|surgeon gown|disposable gown,List II: part of room charges; not payable separately.
+2,SLIPPERS,,List II: part of room charges; not payable separately.
+2,TISSUE PAPER,tissue paper|tissues,List II: part of room charges; not payable separately.
+2,TOOTH PASTE,tooth paste|toothpaste,List II: part of room charges; not payable separately.
+2,TOOTH BRUSH,tooth brush|toothbrush,List II: part of room charges; not payable separately.
+2,BED PAN,bed pan|bedpan,List II: part of room charges; not payable separately.
+2,FACE MASK,face mask,List II: part of room charges; not payable separately.
+2,FLEXI MASK,,List II: part of room charges; not payable separately.
+2,HAND HOLDER,,List II: part of room charges; not payable separately.
+2,SPUTUM CUP,sputum cup|sputum container,List II: part of room charges; not payable separately.
+2,DISINFECTANT LOTIONS,,List II: part of room charges; not payable separately.
+2,LUXURY TAX,,List II: part of room charges; not payable separately.
+2,HVAC,,List II: part of room charges; not payable separately.
+2,HOUSE KEEPING CHARGES,housekeeping|house keeping,List II: part of room charges; not payable separately.
+2,AIR CONDITIONER CHARGES,ac charges|air conditioner|air conditioning,List II: part of room charges; not payable separately.
+2,IM IV INJECTION CHARGES,injection charges|im injection charges|iv injection charges|injection administration,List II: part of room charges; not payable separately.
+2,CLEAN SHEET,,List II: part of room charges; not payable separately.
+2,BLANKET/WARMER BLANKET,blanket|warmer blanket|bair hugger,List II: part of room charges; not payable separately.
+2,ADMISSION KIT,admission kit,List II: part of room charges; not payable separately.
+2,DIABETIC CHART CHARGES,,List II: part of room charges; not payable separately.
+2,DOCUMENTATION CHARGES / ADMINISTRATIVE EXPENSES,documentation charges|administrative charges|admin charges|administration charges,List II: part of room charges; not payable separately.
+2,DISCHARGE PROCEDURE CHARGES,discharge charges|discharge procedure,List II: part of room charges; not payable separately.
+2,DAILY CHART CHARGES,,List II: part of room charges; not payable separately.
+2,ENTRANCE PASS / VISITORS PASS CHARGES,visitor pass|visitors pass|entrance pass|gate pass,List II: part of room charges; not payable separately.
+2,EXPENSES RELATED TO PRESCRIPTION ON DISCHARGE,,List II: part of room charges; not payable separately.
+2,FILE OPENING CHARGES,file opening|file charges|file charge,List II: part of room charges; not payable separately.
+2,INCIDENTAL EXPENSES / MISC. CHARGES (NOT EXPLAINED),miscellaneous|misc charges|misc. charges|incidental charges|sundry,List II: part of room charges; not payable separately.
+2,PATIENT IDENTIFICATION BAND / NAME TAG,id band|identification band|name tag|wrist band,List II: part of room charges; not payable separately.
+2,PULSEOXYMETER CHARGES,pulse oximeter|pulseoximeter|spo2 monitoring charges,List II: part of room charges; not payable separately.
+3,HAIR REMOVAL CREAM,hair removal cream|veet,List III: part of procedure charges; not payable separately.
+3,DISPOSABLES RAZORS CHARGES (FOR SITE PREPARATIONS),razor|disposable razor|shaving charges|part preparation,List III: part of procedure charges; not payable separately.
+3,EYE PAD,,List III: part of procedure charges; not payable separately.
+3,EYE SHEILD,eye shield,List III: part of procedure charges; not payable separately.
+3,CAMERA COVER,,List III: part of procedure charges; not payable separately.
+3,"DVD, CD CHARGES",cd charges|dvd charges|cd/dvd,List III: part of procedure charges; not payable separately.
+3,GAUSE SOFT,gauze soft|gause soft,List III: part of procedure charges; not payable separately.
+3,GAUZE,gauze|gauze pieces|gauze swab,List III: part of procedure charges; not payable separately.
+3,WARD AND THEATRE BOOKING CHARGES,theatre booking|ot booking|ward booking,List III: part of procedure charges; not payable separately.
+3,ARTHROSCOPY AND ENDOSCOPY INSTRUMENTS,,List III: part of procedure charges; not payable separately.
+3,MICROSCOPE COVER,,List III: part of procedure charges; not payable separately.
+3,"SURGICAL BLADES, HARMONIC SCALPEL, SHAVER",surgical blade|surgical blades|harmonic scalpel|shaver blade,List III: part of procedure charges; not payable separately.
+3,SURGICAL DRILL,,List III: part of procedure charges; not payable separately.
+3,EYE KIT,,List III: part of procedure charges; not payable separately.
+3,EYE DRAPE,,List III: part of procedure charges; not payable separately.
+3,X-RAY FILM,x-ray film|xray film,List III: part of procedure charges; not payable separately.
+3,BOYLES APPARATUS CHARGES,boyles apparatus|boyle's apparatus,List III: part of procedure charges; not payable separately.
+3,COTTON,cotton|cotton roll|absorbent cotton,List III: part of procedure charges; not payable separately.
+3,COTTON BANDAGE,cotton bandage|roller bandage,List III: part of procedure charges; not payable separately.
+3,SURGICAL TAPE,surgical tape|micropore|leucoplast|transpore,List III: part of procedure charges; not payable separately.
+3,APRON,apron|lead apron,List III: part of procedure charges; not payable separately.
+3,TORNIQUET,tourniquet|torniquet,List III: part of procedure charges; not payable separately.
+3,"ORTHOBUNDLE, GYNAEC BUNDLE",ortho bundle|gynaec bundle|gynae bundle,List III: part of procedure charges; not payable separately.
+4,ADMISSION/REGISTRATION CHARGES,admission charges|registration charges|registration fee|admission fee,List IV: part of cost of treatment; not payable separately.
+4,HOSPITALISATION FOR EVALUATION/ DIAGNOSTIC PURPOSE,,List IV: part of cost of treatment; not payable separately.
+4,URINE CONTAINER,urine container,List IV: part of cost of treatment; not payable separately.
+4,BLOOD RESERVATION CHARGES AND ANTE NATAL BOOKING CHARGES,,List IV: part of cost of treatment; not payable separately.
+4,BIPAP MACHINE,bipap machine,List IV: part of cost of treatment; not payable separately.
+4,CPAP/ CAPD EQUIPMENTS,cpap machine|capd equipment,List IV: part of cost of treatment; not payable separately.
+4,INFUSION PUMP - COST,infusion pump|syringe pump,List IV: part of cost of treatment; not payable separately.
+4,HYDROGEN PEROXIDE / SPIRIT / DISINFECTANTS ETC,hydrogen peroxide|surgical spirit|savlon|dettol|betadine solution,List IV: part of cost of treatment; not payable separately.
+4,NUTRITION PLANNING CHARGES - DIETICIAN CHARGES - DIET CHARGES,dietician charges|dietitian charges|nutrition planning|diet consultation,List IV: part of cost of treatment; not payable separately.
+4,HIV KIT,,List IV: part of cost of treatment; not payable separately.
+4,ANTISEPTIC MOUTHWASH,mouthwash|mouth wash|chlorhexidine mouthwash,List IV: part of cost of treatment; not payable separately.
+4,LOZENGES,,List IV: part of cost of treatment; not payable separately.
+4,MOUTH PAINT,,List IV: part of cost of treatment; not payable separately.
+4,VACCINATION CHARGES,vaccination charges|vaccine administration,List IV: part of cost of treatment; not payable separately.
+4,ALCOHOL SWABS,alcohol swab|alcohol swabs|prep pad,List IV: part of cost of treatment; not payable separately.
+4,SCRUB SOLUTION/STERILLIUM,sterillium|scrub solution|hand scrub,List IV: part of cost of treatment; not payable separately.
+4,GLUCOMETER & STRIPS,glucometer|glucose strips|glucometer strips|grbs strips,List IV: part of cost of treatment; not payable separately.
+4,URINE BAG,urine bag|urobag|uro bag|urine collection bag,List IV: part of cost of treatment; not payable separately.

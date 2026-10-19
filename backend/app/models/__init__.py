@@ -10,7 +10,14 @@ from app.models.extraction import (
     Medication,
     Procedure,
 )
-from app.models.reference import Icd10Code, NonPayableItem, Package, PolicyTerm, TariffRate
+from app.models.reference import (
+    Icd10Code,
+    NonPayableItem,
+    Package,
+    PolicyTerm,
+    ReferenceImport,
+    TariffRate,
+)
 from app.models.rules import Finding, FindingReview, Rule
 from app.models.user import AuditLog, Role, User
 
@@ -34,6 +41,7 @@ __all__ = [
     "Procedure",
     "Role",
     "Rule",
+    "ReferenceImport",
     "TariffRate",
     "User",
 ]

@@ -7,16 +7,25 @@ billing and policy checks, and gives the adjudicator a risk score with evidence.
 
 1. Copy `.env.example` to `.env`.
 2. `docker compose up --build`
-3. Open http://localhost:5173 (dashboard) and http://localhost:8000/docs (API).
+3. Open http://localhost:5174 (dashboard) and http://localhost:8001/docs (API).
+
+## Reference data
+
+Load the bundled datasets once (IRDAI non-payables, standard policy terms, ICD-10):
+
+`docker compose exec backend python -m app.cli load-reference-defaults`
+
+CGHS rates and PM-JAY packages are loaded from the official files. See
+`backend/reference_data/README.md`.
 
 ## Services
 
 | Service  | Port | Purpose                              |
 |----------|------|--------------------------------------|
-| frontend | 5173 | React dashboard (Vite dev server)    |
-| backend  | 8000 | FastAPI API                          |
+| frontend | 5174 | React dashboard (Vite dev server)    |
+| backend  | 8001 | FastAPI API                          |
 | worker   | -    | Background jobs (OCR, checks)        |
-| postgres | 5432 | Database                             |
+| postgres | 5433 | Database                             |
 | redis    | 6379 | Job queue                            |
 
 ## Tests

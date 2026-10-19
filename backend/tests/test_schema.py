@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import IntegrityError
 
@@ -85,9 +86,10 @@ def make_claim(db, number="CLM-0001") -> Claim:
 
 # ---------- migrations ----------
 
-def test_migrations_are_at_head(test_engine):
+def test_migrations_are_at_head(test_engine, alembic_cfg):
+    head = ScriptDirectory.from_config(alembic_cfg).get_current_head()
     with test_engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0002"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == head
 
 
 def test_models_match_migrations(test_engine):

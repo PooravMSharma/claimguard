@@ -1,0 +1,15 @@
+{
+  "source_name": "CGHS OM F.No. 5-16/CGHS(HQ)/HEC/2024 (Part I) dated 03.10.2025 - revised package rates",
+  "source_url": "https://cghs.mohfw.gov.in/",
+  "effective_from": "2025-10-13",
+  "base": {"city_tier": "tier_1", "ward_type": "semi_private", "grade": "nabh",
+           "note": "Annexure I rates are for Tier I (X) cities, semi-private ward, with Non-NABH / NABH / Super Speciality columns."},
+  "city_tier_factor": {"tier_1": 1.0, "tier_2": 0.90, "tier_3": 0.80,
+                       "note": "Tier II (Y) 10% lower, Tier III (Z) 20% lower than Tier I. North-East, J&K and Ladakh use Tier II rates."},
+  "grade_factor": {"nabh": 1.0, "non_nabh": 0.85, "super_speciality": 1.15,
+                   "note": "Non-NABH/NABL 15% lower than NABH. Super speciality hospitals 15% higher than NABH for their super specialities."},
+  "ward_factor": {"general": 0.95, "semi_private": 1.0, "private": 1.05,
+                  "note": "General ward 5% lower, private ward 5% higher than semi-private."},
+  "ward_uniform_note": "Consultations, investigations, radiotherapy, day care procedures and minor procedures not requiring admission are the same for every ward.",
+  "ward_uniform_keywords": ["consult", "laborator", "investigation", "radiolog", "imaging", "ultrasound", "x-ray", "x ray", "ct scan", "mri", "nuclear", "pet", "radiotherapy", "radiation", "day care", "daycare", "minor procedure", "pathology", "biochemistry", "microbiology", "haematology", "hematology", "test"]
+}
