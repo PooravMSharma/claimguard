@@ -192,7 +192,7 @@ def test_generate_writes_files_and_is_reproducible(tmp_path):
         record = json.loads((folder / "record.json").read_text())
         pdf = PdfReader(folder / "claim.pdf")
         assert len(pdf.pages) == int(row["pages"]) == truth["documents"][-1]["last_page"]
-        assert pdf.metadata["/Title"] == f"Claim file {row['claim_id']}"
+        assert pdf.metadata is not None and pdf.metadata["/Title"] == f"Claim file {row['claim_id']}"
         assert [d["type"] for d in record["documents"]] == [d["type"] for d in truth["documents"]]
         for issue in truth["issues"]:
             assert all(1 <= p <= len(pdf.pages) for p in issue["pages"])

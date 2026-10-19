@@ -244,6 +244,7 @@ def test_package_import_from_excel_with_title_rows(db, tmp_path):
 
     book = Workbook()
     ws = book.active
+    assert ws is not None
     ws.append(["Health Benefit Package 2022"])          # title row above the table
     ws.append([])
     ws.append(["Procedure Code", "Procedure Name", "Speciality", "Package Price", "ALOS", "Day Care",

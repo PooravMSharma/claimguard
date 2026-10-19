@@ -455,6 +455,7 @@ def build_genuine(claim_id: str, scenario: Scenario, rng: Random, hospital: Hosp
             bill.append(BillLine("Implants", f"{itype} - {brand} {model}", procedure_dt.date(), 1, price, 0))
         anaesthesia = {"cataract": "Topical / peribulbar block", "femur_fracture": "Spinal anaesthesia",
                        "normal_delivery": "Local infiltration", "ptca": "Local anaesthesia (radial access)"}
+        assert scenario.procedure, f"surgical scenario {scenario.key} needs a procedure"
         ot = OtNote([scenario.procedure], procedure_dt, procedure_dt + timedelta(minutes=rng.randint(35, 110)),
                     doctor.name, anaesthetist.name, anaesthesia.get(scenario.key, "General anaesthesia"),
                     scenario.course.split(".")[0] + ".", list(implants))

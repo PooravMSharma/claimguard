@@ -18,7 +18,7 @@ class TableError(Exception):
     pass
 
 
-def _rows_from_file(path: Path, sheet: str | None) -> Iterator[list[object]]:
+def _rows_from_file(path: Path, sheet: str | None) -> Iterator[list]:
     suffix = "".join(path.suffixes[-2:]).lower() if path.name.endswith(".gz") else path.suffix.lower()
     if suffix in {".csv", ".csv.gz"}:
         opener = gzip.open if suffix.endswith(".gz") else open
@@ -57,7 +57,7 @@ def read_table(path: Path, aliases: dict[str, list[str]], required: list[str], s
 
     out: list[dict[str, object]] = []
     for raw in rows:
-        record = {col: (raw[i] if i < len(raw) else None) for i, col in mapping.items()}
+        record: dict[str, object] = {col: (raw[i] if i < len(raw) else None) for i, col in mapping.items()}
         if all(v is None or str(v).strip() == "" for v in record.values()):
             continue
         out.append(record)

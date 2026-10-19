@@ -31,7 +31,7 @@ def list_audit(
     if entity_type:
         filters.append(AuditLog.entity_type == entity_type)
 
-    total = db.scalar(select(func.count()).select_from(AuditLog).where(*filters))
+    total = db.scalar(select(func.count()).select_from(AuditLog).where(*filters)) or 0
     rows = db.execute(
         select(AuditLog, User.email)
         .outerjoin(User, User.id == AuditLog.user_id)

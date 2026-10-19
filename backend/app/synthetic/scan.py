@@ -14,10 +14,11 @@ SCALE = 1.4  # ~100 dpi: the low end of what TPAs receive
 
 def _degrade(page: Image.Image, rng: Random) -> Image.Image:
     img = page.convert("L")
-    img = img.rotate(rng.uniform(-1.8, 1.8), resample=Image.BICUBIC, expand=False, fillcolor=255)
+    img = img.rotate(rng.uniform(-1.8, 1.8), resample=Image.Resampling.BICUBIC, expand=False, fillcolor=255)
     # sparse dark specks on a white page, like dust and toner noise
     speck = rng.uniform(1.2, 2.2)
-    noise = Image.effect_noise(img.size, 32).point(lambda v: 255 - int(max(0, abs(v - 128) - 45) * speck))
+    table = [255 - int(max(0, abs(v - 128) - 45) * speck) for v in range(256)]
+    noise = Image.effect_noise(img.size, 32).point(table)
     img = ImageChops.multiply(img, noise)
     img = img.filter(ImageFilter.GaussianBlur(rng.uniform(0.3, 0.9)))
     img = ImageEnhance.Contrast(img).enhance(rng.uniform(0.75, 0.95))
@@ -30,7 +31,8 @@ def _degrade(page: Image.Image, rng: Random) -> Image.Image:
 def scan_pdf(pdf_bytes: bytes, rng: Random) -> bytes:
     doc = pdfium.PdfDocument(pdf_bytes)
     try:
-        pages = [_degrade(doc[i].render(scale=SCALE).to_pil(), rng) for i in range(len(doc))]
+        bitmaps = [doc[i].render(scale=SCALE) for i in range(len(doc))]  # type: ignore[arg-type]
+        pages = [_degrade(b.to_pil(), rng) for b in bitmaps]
     finally:
         doc.close()
     out = io.BytesIO()

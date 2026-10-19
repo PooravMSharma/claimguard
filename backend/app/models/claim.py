@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
@@ -18,6 +19,18 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
+
+if TYPE_CHECKING:  # imported for type hints only; at runtime SQLAlchemy resolves the names
+    from app.models.decision import Decision
+    from app.models.extraction import (
+        BillLineItem,
+        Diagnosis,
+        ExtractedField,
+        Investigation,
+        Medication,
+        Procedure,
+    )
+    from app.models.rules import Finding
 from app.models.enums import (
     ClaimStage,
     ClaimStatus,
@@ -78,28 +91,28 @@ class Claim(TimestampMixin, Base):
     documents: Mapped[list["ClaimDocument"]] = relationship(
         back_populates="claim", cascade="all, delete-orphan", passive_deletes=True
     )
-    extracted_fields: Mapped[list["ExtractedField"]] = relationship(  # noqa: F821
+    extracted_fields: Mapped[list["ExtractedField"]] = relationship(
         back_populates="claim", cascade="all, delete-orphan", passive_deletes=True
     )
-    bill_line_items: Mapped[list["BillLineItem"]] = relationship(  # noqa: F821
+    bill_line_items: Mapped[list["BillLineItem"]] = relationship(
         back_populates="claim", cascade="all, delete-orphan", passive_deletes=True
     )
-    diagnoses: Mapped[list["Diagnosis"]] = relationship(  # noqa: F821
+    diagnoses: Mapped[list["Diagnosis"]] = relationship(
         back_populates="claim", cascade="all, delete-orphan", passive_deletes=True
     )
-    procedures: Mapped[list["Procedure"]] = relationship(  # noqa: F821
+    procedures: Mapped[list["Procedure"]] = relationship(
         back_populates="claim", cascade="all, delete-orphan", passive_deletes=True
     )
-    investigations: Mapped[list["Investigation"]] = relationship(  # noqa: F821
+    investigations: Mapped[list["Investigation"]] = relationship(
         back_populates="claim", cascade="all, delete-orphan", passive_deletes=True
     )
-    medications: Mapped[list["Medication"]] = relationship(  # noqa: F821
+    medications: Mapped[list["Medication"]] = relationship(
         back_populates="claim", cascade="all, delete-orphan", passive_deletes=True
     )
-    findings: Mapped[list["Finding"]] = relationship(  # noqa: F821
+    findings: Mapped[list["Finding"]] = relationship(
         back_populates="claim", cascade="all, delete-orphan", passive_deletes=True
     )
-    decisions: Mapped[list["Decision"]] = relationship(  # noqa: F821
+    decisions: Mapped[list["Decision"]] = relationship(
         back_populates="claim", cascade="all, delete-orphan", passive_deletes=True
     )
 

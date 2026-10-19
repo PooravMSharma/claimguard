@@ -158,6 +158,7 @@ def claim_form(x: _Doc) -> None:
 
 def preauth(x: _Doc) -> None:
     c, pa = x.case, x.case.preauth
+    assert pa is not None, "preauth document on a claim without a pre-auth"
     x.letterhead("REQUEST FOR CASHLESS HOSPITALISATION (PRE-AUTHORISATION)")
     x.patient_block([("Policy No.", c.policy.policy_no), ("Requested on", dt(pa.requested_on))])
     x.kv([("Provisional diagnosis", pa.diagnosis), ("Proposed treatment", pa.procedure),
@@ -210,7 +211,7 @@ def final_bill(x: _Doc) -> None:
     x.letterhead("FINAL BILL - IN-PATIENT")
     x.patient_block([("Bill No.", c.bill_no), ("Bill date", d(c.discharge)),
                      ("Room category", c.ward_type.replace("_", "-").title()), ("Payer", c.policy.tpa)])
-    rows = [["#", "Date", "Category", "Description", "Qty", "Rate", "Amount"]]
+    rows: list[list] = [["#", "Date", "Category", "Description", "Qty", "Rate", "Amount"]]
     style = TableStyle(GRID.getCommands())
     for i, line in enumerate(c.bill, 1):
         rows.append([str(i), d(line.day), Paragraph(line.category, SMALL), Paragraph(line.description, BODY),
@@ -235,7 +236,7 @@ def pharmacy_bill(x: _Doc) -> None:
     c = x.case
     x.letterhead("IN-HOUSE PHARMACY - CREDIT BILL")
     x.patient_block([("Drug Lic. No.", f"RJ-{zlib.crc32(c.hospital.name.encode()) % 90000 + 10000}/20B")])
-    rows = [["#", "Item", "Batch", "Exp.", "Qty", "MRP", "Rate", "Amount"]]
+    rows: list[list] = [["#", "Item", "Batch", "Exp.", "Qty", "MRP", "Rate", "Amount"]]
     for i, line in enumerate(c.pharmacy, 1):
         rows.append([str(i), Paragraph(line.drug, BODY), line.batch, line.expiry, str(line.qty), rs(line.mrp),
                      rs(line.rate), rs(line.amount)])
@@ -291,6 +292,7 @@ def imaging_report(x: _Doc) -> None:
 
 def ot_note(x: _Doc) -> None:
     c, ot = x.case, x.case.ot
+    assert ot is not None, "OT note on a claim without surgery"
     x.letterhead("OPERATION NOTES AND ANAESTHESIA RECORD")
     x.patient_block()
     x.kv([("Date", d(ot.start)), ("Time", f"{ot.start:%H:%M} - {ot.end:%H:%M}"), ("Surgeon", ot.surgeon),
@@ -344,7 +346,7 @@ def nursing_chart(x: _Doc) -> None:
     c = x.case
     x.letterhead("NURSING / TPR CHART AND MEDICATION ADMINISTRATION RECORD")
     x.patient_block()
-    rows = [["Date", "Location", "Temp (F)", "Pulse", "BP", "RR", "SpO2", "Medicines administered"]]
+    rows: list[list] = [["Date", "Location", "Temp (F)", "Pulse", "BP", "RR", "SpO2", "Medicines administered"]]
     for n in c.nursing:
         rows.append([d(n.day), n.location, f"{n.temp_f}", str(n.pulse), n.bp, str(n.rr), f"{n.spo2}%",
                      Paragraph("; ".join(n.meds), SMALL)])
@@ -356,6 +358,7 @@ def nursing_chart(x: _Doc) -> None:
 
 def mlc(x: _Doc) -> None:
     c = x.case
+    assert c.mlc is not None, "MLC document on a non-accident claim"
     x.letterhead("MEDICO-LEGAL CASE (MLC) INTIMATION")
     x.patient_block()
     x.kv([("MLC No.", c.mlc["number"]), ("Date / time", dt(c.mlc["date"])), ("Police station", c.mlc["station"]),

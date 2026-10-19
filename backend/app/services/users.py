@@ -18,7 +18,7 @@ def get_role(db: Session, name: RoleName) -> Role:
 
 
 def email_taken(db: Session, email: str) -> bool:
-    return db.scalar(select(func.count()).select_from(User).where(User.email == email.lower())) > 0
+    return (db.scalar(select(func.count()).select_from(User).where(User.email == email.lower())) or 0) > 0
 
 
 def create_user(db: Session, *, email: str, full_name: str, role: RoleName, password: str) -> User:
@@ -41,4 +41,4 @@ def create_user(db: Session, *, email: str, full_name: str, role: RoleName, pass
 def count_active_admins(db: Session) -> int:
     return db.scalar(
         select(func.count()).select_from(User).join(Role).where(Role.name == RoleName.ADMIN, User.is_active)
-    )
+    ) or 0

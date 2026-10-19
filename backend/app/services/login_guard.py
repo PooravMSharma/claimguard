@@ -18,7 +18,8 @@ def _key(email: str) -> str:
 
 def is_locked(email: str) -> bool:
     try:
-        return int(redis_conn.get(_key(email)) or 0) >= get_settings().login_max_failures
+        value = redis_conn.get(_key(email))
+        return int(value or 0) >= get_settings().login_max_failures  # type: ignore[arg-type]
     except Exception:
         log.warning("Login guard unavailable (Redis); skipping lockout check")
         return False
