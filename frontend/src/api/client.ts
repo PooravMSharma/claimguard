@@ -7,28 +7,39 @@ export class ApiError extends Error {
   }
 }
 
+/** Fired when the server says the session is gone, so the app can return to the login page. */
+export const UNAUTHORIZED_EVENT = "cg:unauthorized";
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api${path}`, {
     method,
+    credentials: "same-origin",
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+
+  if (response.status === 401 && !path.startsWith("/auth/")) {
+    window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+  }
 
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
     try {
       const data = await response.json();
       if (typeof data?.detail === "string") message = data.detail;
+      else if (Array.isArray(data?.detail) && data.detail[0]?.msg) message = String(data.detail[0].msg);
     } catch {
       // response had no JSON body
     }
     throw new ApiError(response.status, message);
   }
 
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
+  patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
 };

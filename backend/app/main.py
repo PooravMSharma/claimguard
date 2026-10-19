@@ -9,6 +9,9 @@ from app.core.logging import setup_logging
 settings = get_settings()
 setup_logging(debug=settings.is_development)
 
+if not settings.is_development and (settings.secret_key.startswith("change-me") or len(settings.secret_key) < 32):
+    raise RuntimeError("SECRET_KEY must be set to a long random value outside development")
+
 app = FastAPI(
     title=f"{settings.app_name} API",
     version=__version__,

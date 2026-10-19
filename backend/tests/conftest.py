@@ -5,18 +5,23 @@ fresh, migrated to the latest schema, and dropped at the end. Your development
 data is never touched. Each test runs inside a transaction that is rolled back.
 """
 
+import os
 from collections.abc import Generator
 from pathlib import Path
 
-import pytest
-from alembic import command
-from alembic.config import Config
-from sqlalchemy import Engine, create_engine, text
-from sqlalchemy.engine import URL, make_url
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session
+# Faster password hashing in tests only (must be set before the app reads settings).
+os.environ.setdefault("BCRYPT_ROUNDS", "4")
 
-from app.core.config import get_settings
+import pytest  # noqa: E402
+from alembic import command  # noqa: E402
+from alembic.config import Config  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import Engine, create_engine, text  # noqa: E402
+from sqlalchemy.engine import URL, make_url  # noqa: E402
+from sqlalchemy.exc import OperationalError  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
+
+from app.core.config import get_settings  # noqa: E402
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -73,3 +78,15 @@ def db(test_engine: Engine) -> Generator[Session, None, None]:
         session.close()
         outer.rollback()
         conn.close()
+
+
+@pytest.fixture
+def client(db: Session) -> Generator[TestClient, None, None]:
+    """API client whose requests use the rolled-back test session."""
+    from app.db.session import get_db
+    from app.main import app
+
+    app.dependency_overrides[get_db] = lambda: db
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()

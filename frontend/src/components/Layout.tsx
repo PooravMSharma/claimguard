@@ -1,13 +1,25 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
-const NAV = [
-  { to: "/claims", label: "Claim queue" },
-  { to: "/upload", label: "Upload claim" },
-  { to: "/admin", label: "Admin" },
-  { to: "/status", label: "System status" },
+import { ROLE_LABELS } from "../api/types";
+import { useAuth } from "../auth/AuthContext";
+
+const NAV: { to: string; label: string; permission: string }[] = [
+  { to: "/claims", label: "Claim queue", permission: "claims.view" },
+  { to: "/upload", label: "Upload claim", permission: "claims.upload" },
+  { to: "/admin/users", label: "Users", permission: "users.manage" },
+  { to: "/admin/audit", label: "Audit log", permission: "audit.view" },
+  { to: "/status", label: "System status", permission: "system.view" },
 ];
 
 export default function Layout() {
+  const { user, logout, can } = useAuth();
+  const navigate = useNavigate();
+
+  const signOut = async () => {
+    await logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -16,7 +28,7 @@ export default function Layout() {
           <span className="brand-name">ClaimGuard</span>
         </div>
         <nav className="nav" aria-label="Main">
-          {NAV.map((item) => (
+          {NAV.filter((item) => can(item.permission)).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -26,7 +38,15 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div className="sidebar-foot">v0.1 · development</div>
+        {user && (
+          <div className="user-box">
+            <div className="user-name">{user.full_name}</div>
+            <div className="user-role">{ROLE_LABELS[user.role]}</div>
+            <button className="link-button" onClick={signOut}>
+              Sign out
+            </button>
+          </div>
+        )}
       </aside>
       <main className="content">
         <Outlet />

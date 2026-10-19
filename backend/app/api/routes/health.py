@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from rq import Worker
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
 from sqlalchemy import text
 
 from app import __version__
+from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.db.session import engine
 from app.services.queue import job_queue, redis_conn
@@ -66,13 +67,13 @@ def health() -> dict:
     }
 
 
-@router.post("/test-job")
+@router.post("/test-job", dependencies=[Depends(get_current_user)])
 def start_test_job() -> dict:
     job = job_queue.enqueue("app.worker.jobs.ping", "hello from ClaimGuard", result_ttl=600)
     return {"job_id": job.id, "status": job.get_status()}
 
 
-@router.get("/test-job/{job_id}")
+@router.get("/test-job/{job_id}", dependencies=[Depends(get_current_user)])
 def get_test_job(job_id: str) -> dict:
     try:
         job = Job.fetch(job_id, connection=redis_conn)

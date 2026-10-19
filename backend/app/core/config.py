@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     app_name: str = "ClaimGuard"
     app_env: str = "development"
     secret_key: str = "change-me"
+    access_token_minutes: int = 480  # one 8-hour shift
+    bcrypt_rounds: int = 12
+    login_max_failures: int = 5
+    login_lockout_seconds: int = 900
 
     database_url: str = "postgresql+psycopg://claimguard:claimguard@localhost:5432/claimguard"
 
