@@ -26,7 +26,13 @@ def health() -> dict:
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        checks["database"] = {"ok": True}
+            try:
+                revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+            except Exception:
+                revision = None
+        checks["database"] = {"ok": revision is not None, "schema": revision}
+        if revision is None:
+            checks["database"]["error"] = "Migrations not applied (run: alembic upgrade head)"
     except Exception as exc:
         checks["database"] = {"ok": False, "error": _error(exc)}
 

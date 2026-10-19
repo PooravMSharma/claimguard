@@ -3,6 +3,7 @@ export interface ServiceCheck {
   error?: string;
   count?: number;
   backend?: string;
+  schema?: string | null;
 }
 
 export interface HealthResponse {

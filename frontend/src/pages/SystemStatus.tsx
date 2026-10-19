@@ -98,6 +98,7 @@ export default function SystemStatus() {
                     <span className={check.ok ? "status-ok" : "status-bad"}>
                       {check.ok ? "Running" : "Down"}
                       {key === "worker" && check.count !== undefined ? ` (${check.count})` : ""}
+                      {key === "database" && check.schema ? ` · schema ${check.schema}` : ""}
                     </span>
                     {check.error && <span className="status-error">{check.error}</span>}
                   </li>
