@@ -33,7 +33,8 @@ published guidelines and are capped at **amber** until a clinician has reviewed 
 backend/
   app/
     ai/            provider interface + Ollama/Anthropic clients (structured JSON answers)
-    api/routes/    auth, users, audit, health, reference, claims, record
+    api/routes/    auth, users, audit, health, reference, claims (queue), record, findings, review (summary,
+                   assign, decisions, query letter)
     core/          config (Settings from .env), security, logging
     db/            session
     extraction/    claim record: values (parsing), layout (lines/labels/tables), documents (per-type
@@ -45,6 +46,8 @@ backend/
                    judgement.py = the AI checks); ai_review.py (AI reviewer: facts pack, questions, cache);
                    pdf_fonts.py (fonts in digital PDFs, F-02/F-04); reference.py (lookups); defaults.py
                    (thresholds); store.py (rules table, save findings, AI cache/log); evaluate.py (score vs truth)
+    review/        Step 11: scoring.py (risk score / band / suggested payable), sla.py (IRDAI deadlines),
+                   letters.py (query letter draft)
     schemas/       pydantic API schemas
     services/      intake, storage (local/S3), queue, audit, users, login_guard, reference importers
     synthetic/     synthetic claim generator (ground truth for every check)
@@ -55,7 +58,8 @@ backend/
   tests/
 frontend/src/
   api/ (client.ts, types.ts)  auth/  components/
-  pages/claims/ (ClaimQueue, UploadClaim, ClaimDetail, ClaimRecordView, PageViewer)
+  pages/claims/ (ClaimQueue, UploadClaim, ClaimDetail = review screen, ReviewHeader, FindingsView,
+                 DecisionPanel, ClaimRecordView, PageViewer)
   pages/admin/ (Users, AuditLog)  pages/reference/ReferenceData.tsx
 ```
 
@@ -88,6 +92,7 @@ evaluate-extraction [--misses N]             # claim record vs ground truth, AI 
 ai-check                                     # one test request to the configured AI model (run in worker)
 run-checks --synthetic | --claim CG-... [--no-ai] [--limit N]   # re-run checks on stored records (no re-reading)
 evaluate-checks [--misses N]                 # findings vs ground truth: recall, precision, false reds, band
+rescore                                      # risk score / band / payable from stored findings (no re-run)
 
 # Synthetic data (deterministic, seed 42): writes backend/synthetic_data/ (gitignored)
 docker compose exec backend python -m app.synthetic --count 300
@@ -106,6 +111,7 @@ AI_CHECKS=true                # AI judgement checks (default true when AI_PROVID
 AI_PARALLEL_CALLS=1           # 1 for a local model
 AI_TIMEOUT_SECONDS=600
 AI_IMAGE_MAX_SIDE=1280
+SLA_CASHLESS_HOURS=3          # review deadlines (defaults shown); SLA_PREAUTH_HOURS=1, SLA_REIMBURSEMENT_DAYS=15
 ```
 
 ## Current state
@@ -130,8 +136,15 @@ Build plan: 14 steps.
   - Mac with Ollama qwen2.5vl:7b (29 claims): clean 100% recall / 100% precision; AI checks found 1/1 on clean
     and 1/1 on scans, 0 false flags. A 7B model asked open clinical questions over-flagged badly (4 false
     flags in 8 claims), hence the gates. Sample is small: re-measure on more claims in Step 13.
-- **Next: Step 11, scoring and review screen.**
-- Then: 12 admin/rules management, 13 evaluation on freshly regenerated
+- Step 11: risk score and band per claim (PRD rules: any red finding or score >= 70 -> red; any amber or
+  score 30-69 -> amber; else green; score = sum of rule weights, max 100; medical findings alone never red;
+  dismissed findings stop counting), IRDAI review deadlines, queue sorted by priority with band / assignee
+  filters, review screen (summary header, ranked findings beside the page, keyboard shortcuts, notes),
+  decision panel (approve / with deductions / query with letter draft / escalate / SIU) and assignment.
+  Offline (300 clean, rules only): stored band matches the seeded band on 286/300; all 14 differences are
+  claims whose only seeded issue is an AI check (no model offline).
+- **Next: Step 12, admin and rules management.**
+- Then: 13 evaluation on freshly regenerated
   synthetic data, 14 hardening.
 - Still pending from the client: the official CGHS OM (03.10.2025, Annexure I) and the PM-JAY HBP 2022
   package list (backend/reference_data/raw/). Until then benchmarks are the synthetic SYN- set.
@@ -153,6 +166,10 @@ Build plan: 14 steps.
   passed / flagged / not_applicable / not_evaluable; the engine applies the severity policy (cap at the
   rule's max; medical amber until clinician-reviewed; red downgraded to amber when evidence could be a misread).
 - **Findings that a reviewer has confirmed or dismissed are never deleted**; re-runs match them by fingerprint.
+- **Review workflow:** a note never settles a finding; medical-necessity findings are confirmed or dismissed only
+  by a senior / medical reviewer (`claims.review_escalated`); approval needs every red and amber finding
+  reviewed; after "escalate" only a senior reviewer decides; approve / approve with deductions close the claim.
+  Every review, assignment and decision is audit-logged and re-scores the claim.
 - **Fatal AI errors stop further calls for that claim.** Fatal means no server, no model or no credit.
   The claim is still processed with rules only.
 - **Tests never call a real AI.** Use `FakeAI` / the fake Ollama server in `tests/test_ai_providers.py`, or

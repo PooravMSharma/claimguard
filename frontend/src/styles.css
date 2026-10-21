@@ -1205,11 +1205,14 @@ a.button {
   justify-content: flex-end;
 }
 
+/* Drawn around the value, never over it: the frame sits outside the text box (offsets in PageViewer) and the
+   tint multiplies, so the text underneath stays fully readable. */
 .focus-box {
   position: absolute;
-  border: 3px solid #f59e0b;
-  background: rgba(245, 158, 11, 0.18);
-  border-radius: 3px;
+  border: 2px solid #f59e0b;
+  background: rgba(253, 224, 71, 0.35);
+  mix-blend-mode: multiply;
+  border-radius: 4px;
   animation: pulse-box 1.2s ease-out 2;
   pointer-events: none;
 }
@@ -1456,4 +1459,353 @@ a.button {
   .checks-table td:nth-child(4) {
     display: none;
   }
+}
+
+/* ---------- Step 11: risk bands, queue, review screen, decisions ---------- */
+
+.content:has(.review-layout) {
+  max-width: 1560px;
+}
+
+.band {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 4px 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.band-score {
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+
+.band-red {
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+
+.band-amber {
+  background: #fff4e5;
+  color: #9a5b00;
+}
+
+.band-green {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.chip-band-red.active {
+  background: var(--bad);
+  border-color: var(--bad);
+}
+
+.chip-band-amber.active {
+  background: #9a5b00;
+  border-color: #9a5b00;
+}
+
+.chip-band-green.active {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.sla {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.sla-soon {
+  color: #9a5b00;
+  font-weight: 600;
+}
+
+.sla-over {
+  color: var(--bad);
+  font-weight: 700;
+}
+
+.sla-soon::before,
+.sla-over::before {
+  content: "⏱ ";
+}
+
+.queue-table .clamp {
+  max-width: 260px;
+}
+
+.waiting {
+  color: #9a5b00;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.sort-select select {
+  margin-left: 4px;
+}
+
+/* review header */
+
+.review-head {
+  border-left: 5px solid var(--border);
+}
+
+.band-edge-red {
+  border-left-color: var(--bad);
+}
+
+.band-edge-amber {
+  border-left-color: #e0a100;
+}
+
+.band-edge-green {
+  border-left-color: var(--ok);
+}
+
+.review-risk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.review-risk > div {
+  flex: 1 1 320px;
+  font-size: 14px;
+}
+
+.review-risk .band {
+  font-size: 15px;
+  padding: 4px 6px 4px 12px;
+}
+
+.score-parts {
+  flex: 1 1 100%;
+}
+
+.score-parts > summary {
+  list-style: none;
+  display: inline;
+  font-size: 13px;
+}
+
+.score-parts table {
+  margin-top: 8px;
+  max-width: 640px;
+}
+
+.compact-table td,
+.compact-table th {
+  padding: 5px 8px;
+  font-size: 13px;
+}
+
+.compact-table .tag {
+  margin-left: 6px;
+}
+
+.review-facts {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}
+
+.review-facts .money-facts {
+  grid-column: span 2;
+}
+
+.file-details > summary {
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.file-details[open] > summary {
+  margin-bottom: 12px;
+}
+
+.file-details .table-card {
+  margin-top: 12px;
+}
+
+/* findings beside the page */
+
+.review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.review-right {
+  position: sticky;
+  top: 12px;
+}
+
+/* Beside the findings the page is scaled to fit the screen height. The canvas shrinks with it so the
+   highlight (placed in % of the canvas) stays on the same spot of the image. */
+.review-right .page-canvas {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.review-right .page-img {
+  width: auto;
+  max-width: 100%;
+  max-height: calc(100vh - 110px);
+}
+
+.viewer.compact {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.viewer.compact.with-panel {
+  grid-template-columns: minmax(0, 1fr) 240px;
+}
+
+@media (max-width: 1200px) {
+  .review-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-right {
+    position: static;
+    order: -1;
+  }
+
+  .review-right .page-img {
+    max-height: 70vh;
+  }
+}
+
+.finding-list .finding {
+  cursor: pointer;
+}
+
+.finding-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.shortcuts {
+  margin: -4px 0 10px;
+}
+
+kbd {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
+  background: var(--surface);
+}
+
+/* decision panel */
+
+.decision-panel {
+  margin-top: 18px;
+}
+
+.recommendations {
+  border: 0;
+  padding: 0;
+  margin: 10px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.radio-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 11px;
+  font-size: 14px;
+  cursor: pointer;
+  background: var(--surface);
+}
+
+.radio-card.active {
+  border-color: var(--accent);
+  background: #eef4ff;
+}
+
+.blockers {
+  margin: 8px 0;
+  padding-left: 30px;
+}
+
+.deductions input {
+  width: 100%;
+}
+
+.deductions .amount-input {
+  width: 120px;
+  text-align: right;
+}
+
+.letter {
+  margin: 12px 0;
+}
+
+.letter-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.letter textarea {
+  width: 100%;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
+
+label.block {
+  display: block;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+label.block textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.decision-history {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0;
+  border-top: 1px solid var(--border);
+}
+
+.decision-history > li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.tag.review-noted {
+  background: #e8f0fe;
+  color: #1a4fb4;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }

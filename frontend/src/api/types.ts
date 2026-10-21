@@ -227,6 +227,107 @@ export interface ClaimRow {
   pages: number;
   created_at: string;
   processing_error: string | null;
+  sla_due_at: string | null;
+  suggested_payable: string | null;
+  assigned_to_id: string | null;
+  assignee: string | null;
+  latest_recommendation: Recommendation | null;
+}
+
+export type RiskBand = "green" | "amber" | "red";
+export type Recommendation = "approve" | "approve_with_deductions" | "query_hospital" | "escalate" | "refer_siu";
+
+export const RECOMMENDATION_LABELS: Record<Recommendation, string> = {
+  approve: "Approve",
+  approve_with_deductions: "Approve with deductions",
+  query_hospital: "Query hospital",
+  escalate: "Escalate to senior reviewer",
+  refer_siu: "Refer to investigation (SIU)",
+};
+
+/** What a recommendation that keeps the claim open means in the queue. */
+export const WAITING_LABELS: Partial<Record<Recommendation, string>> = {
+  query_hospital: "Query sent",
+  escalate: "Escalated",
+  refer_siu: "With SIU",
+};
+
+export interface ScorePart {
+  rule_id: string;
+  name: string;
+  severity: Severity;
+  weight: number;
+  medical: boolean;
+  findings: number;
+}
+
+export interface Person {
+  id: string;
+  name: string;
+  role: RoleName;
+}
+
+export interface DeductionLine {
+  description: string;
+  amount: string;
+  finding_id: string | null;
+}
+
+export interface DecisionRow {
+  id: string;
+  recommendation: Recommendation;
+  approved_amount: string | null;
+  deductions: DeductionLine[];
+  reason: string;
+  decided_by: string | null;
+  created_at: string;
+}
+
+export interface ReviewSummary {
+  claim_id: string;
+  claim_number: string;
+  status: ClaimStatus;
+  stage: ClaimStage;
+  source: "upload" | "synthetic";
+  patient_name: string | null;
+  age: number | null;
+  gender: string | null;
+  policy_number: string | null;
+  sum_insured: string | null;
+  hospital_name: string | null;
+  rohini_id: string | null;
+  doctor: string | null;
+  diagnosis: string | null;
+  icd_code: string | null;
+  procedures: string[];
+  admission_at: string | null;
+  discharge_at: string | null;
+  stay_nights: number | null;
+  claimed_amount: string | null;
+  amount_at_stake: string;
+  suggested_deduction: string;
+  suggested_payable: string | null;
+  score: number | null;
+  band: RiskBand | null;
+  band_reason: string;
+  suggested_action: string;
+  score_parts: ScorePart[];
+  dismissed_findings: number;
+  open_findings: number;
+  open_blocking: number;
+  sla_due_at: string | null;
+  assignee: Person | null;
+  escalated: boolean;
+  decisions: DecisionRow[];
+  approve_blockers: string[];
+  can_decide: boolean;
+}
+
+export interface QueryLetter {
+  subject: string;
+  body: string;
+  documents: string[];
+  clarifications: string[];
 }
 
 export interface ClaimPageItem {
@@ -317,6 +418,7 @@ export interface ClaimList {
   limit: number;
   offset: number;
   counts: Partial<Record<ClaimStatus, number>>;
+  band_counts: Partial<Record<RiskBand | "none", number>>;
 }
 
 export interface UploadResult {
@@ -452,7 +554,7 @@ export interface Evidence {
 
 export interface FindingReview {
   id: string;
-  action: "confirmed" | "dismissed";
+  action: "confirmed" | "dismissed" | "noted";
   reason: string | null;
   reviewer: string | null;
   created_at: string;

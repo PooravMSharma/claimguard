@@ -24,6 +24,7 @@ Checks (Steps 9-10; the AI reviewer runs when AI_PROVIDER is set and AI_CHECKS i
     docker compose exec backend python -m app.cli run-checks --synthetic        # or --claim CG-SYN-0001
     docker compose exec backend python -m app.cli run-checks --synthetic --no-ai --limit 50   # rules only
     docker compose exec backend python -m app.cli evaluate-checks --misses 3
+    docker compose exec backend python -m app.cli rescore          # risk score / band from stored findings
 
 AI model (after setting AI_PROVIDER / AI_MODEL in .env):
     docker compose exec worker python -m app.cli ai-check
@@ -269,7 +270,7 @@ def run_checks_cmd(claim_number: str | None, synthetic: bool, use_ai: bool = Tru
     from app.rules.store import run_for_claim
 
     with SessionLocal() as db:
-        stmt = select(Claim).where(Claim.status == ClaimStatus.READY_FOR_REVIEW)
+        stmt = select(Claim).where(Claim.status.in_([ClaimStatus.READY_FOR_REVIEW, ClaimStatus.IN_REVIEW]))
         if claim_number:
             stmt = select(Claim).where(Claim.claim_number == claim_number)
         elif synthetic:
@@ -303,6 +304,24 @@ def run_checks_cmd(claim_number: str | None, synthetic: bool, use_ai: bool = Tru
     print(f"Done: {len(claims)} claim(s) checked, {totals['findings']} findings "
           f"({totals['red']} red, {totals['amber']} amber, {totals['info']} info). "
           f"AI checks still pending: {totals['pending_ai']}.")
+
+
+def rescore_cmd() -> None:
+    """Recompute risk score, band and suggested payable from the stored findings (no checks are run)."""
+    from sqlalchemy import select
+
+    from app.models.claim import Claim
+    from app.models.rules import CheckRun
+    from app.review.scoring import score_claim
+
+    with SessionLocal() as db:
+        checked = select(CheckRun.claim_id).distinct()
+        claims = db.scalars(select(Claim).where(Claim.id.in_(checked))).all()
+        bands: Counter = Counter()
+        for claim in claims:
+            bands[score_claim(db, claim).band] += 1
+        db.commit()
+    print(f"Scored {len(claims)} claim(s): {bands['red']} red, {bands['amber']} amber, {bands['green']} green.")
 
 
 def _add_source_args(p: argparse.ArgumentParser) -> None:
@@ -362,6 +381,7 @@ def main(argv: list[str] | None = None) -> None:
     ir.add_argument("--source-name", required=True)
     ls = sub.add_parser("load-synthetic-reference", help="Load the synthetic set's benchmarks and registries")
     ls.add_argument("--folder", type=Path, default=Path(__file__).resolve().parents[1] / "synthetic_data")
+    sub.add_parser("rescore", help="Recompute risk scores and bands from stored findings")
     rc = sub.add_parser("run-checks", help="Run the checks again on claims that are ready for review")
     rc.add_argument("--claim", help="One claim number")
     rc.add_argument("--synthetic", action="store_true", help="All synthetic claims")
@@ -432,6 +452,8 @@ def main(argv: list[str] | None = None) -> None:
         import_registries_cmd(args.folder, args.version, args.source_name)
     elif args.command == "load-synthetic-reference":
         load_synthetic_reference(args.folder)
+    elif args.command == "rescore":
+        rescore_cmd()
     elif args.command == "run-checks":
         if not args.claim and not args.synthetic:
             parser.error("give --claim CG-... or --synthetic")

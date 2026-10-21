@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     ai_model: str = "claude-sonnet-5-5"
     ai_extraction: str = "gaps"          # off | gaps (scans and incomplete documents) | all
     ai_checks: bool = True               # AI judgement checks (M-01, M-02, M-04, M-06, X-08, B-11 + AI parts)
+
+    # Review deadlines (IRDAI Master Circular on Health Insurance, 2024); see app/review/sla.py
+    sla_cashless_hours: int = 3
+    sla_preauth_hours: int = 1
+    sla_reimbursement_days: int = 15
     ai_max_calls_per_claim: int = 25
     ai_timeout_seconds: int = 120
     ai_parallel_calls: int = 4

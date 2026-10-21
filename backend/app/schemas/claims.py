@@ -54,6 +54,11 @@ class ClaimRow(BaseModel):
     pages: int
     created_at: datetime
     processing_error: str | None
+    sla_due_at: datetime | None = None
+    suggested_payable: Decimal | None = None
+    assigned_to_id: uuid.UUID | None = None
+    assignee: str | None = None
+    latest_recommendation: str | None = None
 
 
 class PageText(BaseModel):
@@ -86,6 +91,7 @@ class ClaimPage(BaseModel):
     limit: int
     offset: int
     counts: dict[str, int]
+    band_counts: dict[str, int] = {}
 
 
 class UploadResult(BaseModel):

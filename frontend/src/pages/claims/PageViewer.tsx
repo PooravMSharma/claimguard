@@ -26,6 +26,7 @@ interface Props {
   canEditType: boolean;
   onChanged: (claim: ClaimDetail) => void;
   focus?: Focus | null;
+  compact?: boolean;                   // beside the findings: no thumbnail rail
 }
 
 const TYPES = Object.keys(DOC_TYPE_LABELS);
@@ -35,7 +36,7 @@ function QualityDot({ flag }: { flag: QualityFlag | null }) {
   return <span className={`qdot q-${flag}`} title={QUALITY_LABELS[flag]} />;
 }
 
-export default function PageViewer({ claim, canEditType, onChanged, focus }: Props) {
+export default function PageViewer({ claim, canEditType, onChanged, focus, compact = false }: Props) {
   const pages: FlatPage[] = useMemo(
     () =>
       claim.files.flatMap((f) =>
@@ -105,7 +106,8 @@ export default function PageViewer({ claim, canEditType, onChanged, focus }: Pro
 
   // Group consecutive pages of the same type for the thumbnail rail labels.
   return (
-    <div className={`viewer ${panel === "text" ? "with-panel" : ""}`}>
+    <div className={`viewer ${panel === "text" ? "with-panel" : ""} ${compact ? "compact" : ""}`}>
+      {!compact && (
       <div className="thumbs" aria-label="Pages">
         {pages.map((p, i) => {
           const startsGroup = i === 0 || pages[i - 1].docType !== p.docType || pages[i - 1].filename !== p.filename;
@@ -127,6 +129,7 @@ export default function PageViewer({ claim, canEditType, onChanged, focus }: Pro
           );
         })}
       </div>
+      )}
 
       <div className="page-view">
         <div className="page-bar">
@@ -196,10 +199,11 @@ export default function PageViewer({ claim, canEditType, onChanged, focus }: Pro
               key={focus?.stamp}
               className="focus-box"
               style={{
-                left: `${(highlight.x0 - 0.006) * 100}%`,
-                top: `${(highlight.y0 - 0.004) * 100}%`,
-                width: `${(highlight.x1 - highlight.x0 + 0.012) * 100}%`,
-                height: `${(highlight.y1 - highlight.y0 + 0.008) * 100}%`,
+                // the stored box is tight around the glyphs: frame it a few pixels outside, whatever the zoom
+                left: `calc(${highlight.x0 * 100}% - 5px)`,
+                top: `calc(${highlight.y0 * 100}% - 4px)`,
+                width: `calc(${(highlight.x1 - highlight.x0) * 100}% + 10px)`,
+                height: `calc(${(highlight.y1 - highlight.y0) * 100}% + 9px)`,
               }}
             />
           )}

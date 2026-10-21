@@ -183,6 +183,9 @@ def run_for_claim(db: Session, claim: Claim, ref: Reference | None = None, use_a
     ctx = load_context(db, claim, ref, ai=ai)
     outcomes = run_checks(ctx, rules)
     counts = save_outcomes(db, claim.id, outcomes)
+    from app.review.scoring import score_claim
+
+    score_claim(db, claim)
     counts["pending_ai"] = sum(1 for o in outcomes if o.status == PENDING_AI)
     if ai is not None and ai.fatal:
         counts["ai_unavailable"] = 1

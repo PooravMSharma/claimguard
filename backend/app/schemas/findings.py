@@ -36,7 +36,7 @@ class FindingOut(BaseModel):
     needs_medical_review: bool
     model_version: str | None = None  # set when an AI model's judgement raised it
     is_current: bool
-    status: str                      # open | confirmed | dismissed (latest review)
+    status: str                      # open | confirmed | dismissed (latest review; notes do not change it)
     created_at: datetime
     reviews: list[ReviewOut]
 
@@ -75,7 +75,7 @@ class ChecksResponse(BaseModel):
 
 
 class ReviewIn(BaseModel):
-    action: Literal["confirmed", "dismissed"]
+    action: Literal["confirmed", "dismissed", "noted"]
     reason: str | None = Field(default=None, max_length=2000)
 
 

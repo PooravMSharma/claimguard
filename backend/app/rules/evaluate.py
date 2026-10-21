@@ -32,6 +32,8 @@ class Score:
     genuine: int = 0
     genuine_with_red: int = 0
     band_agree: int = 0
+    queue_band_agree: int = 0                 # the stored risk band (score rules included) vs the seeded band
+    queue_scored: int = 0
     ai_pending: int = 0                       # claims on which AI checks were still pending
     found: Counter = field(default_factory=Counter)
     missed: Counter = field(default_factory=Counter)
@@ -39,7 +41,7 @@ class Score:
     examples: dict[str, list[str]] = field(default_factory=lambda: defaultdict(list))
 
     def add(self, claim_number: str, truth: dict, flags: dict[str, list[tuple[str, str]]],
-            pending: set[str] | None = None) -> None:
+            pending: set[str] | None = None, queue_band: str | None = None) -> None:
         pending = pending or set()
         self.claims += 1
         self.ai_pending += bool(pending & set(AI_CHECKS))
@@ -59,6 +61,9 @@ class Score:
         worst = max((SEVERITY_ORDER[s] for s in severities if s != "info"), default=-1)
         band = {2: "red", 1: "amber"}.get(worst, "green")
         self.band_agree += band == expected_band(sorted(expected))
+        if queue_band:
+            self.queue_scored += 1
+            self.queue_band_agree += queue_band == expected_band(sorted(expected))
 
     @property
     def recall(self) -> float:
@@ -74,7 +79,8 @@ class Score:
         found, seeded = sum(self.found.values()), sum(self.found.values()) + sum(self.missed.values())
         lines = [f"{label} ({self.claims} claims): recall {found}/{seeded} = {self.recall:.1%} | precision "
                  f"{self.precision:.1%} | genuine claims with a red: {self.genuine_with_red}/{self.genuine} | "
-                 f"band agrees on {self.band_agree}/{self.claims}"]
+                 f"band agrees on {self.band_agree}/{self.claims}"
+                 + (f" | risk band agrees on {self.queue_band_agree}/{self.queue_scored}" if self.queue_scored else "")]
         ai_found = sum(self.found[c] for c in AI_CHECKS)
         ai_seeded = ai_found + sum(self.missed[c] for c in AI_CHECKS)
         ai_extra = sum(self.extra[c] for c in AI_CHECKS)
@@ -93,7 +99,8 @@ class Score:
 def evaluate(db: Session, folder: Path) -> dict[str, Score]:
     scores = {"clean": Score(), "scanned": Score()}
     claims = db.scalars(select(Claim).where(Claim.source == "synthetic",
-                                            Claim.status == ClaimStatus.READY_FOR_REVIEW)).all()
+                                            Claim.status.in_([ClaimStatus.READY_FOR_REVIEW, ClaimStatus.IN_REVIEW,
+                                                              ClaimStatus.DECIDED]))).all()
     for claim in claims:
         base = claim.claim_number.removesuffix("-S")
         path = folder / "claims" / base / "ground_truth.json"
@@ -105,5 +112,6 @@ def evaluate(db: Session, folder: Path) -> dict[str, Score]:
         pending = set(db.scalars(select(CheckRun.rule_id).where(CheckRun.claim_id == claim.id,
                                                                  CheckRun.status == PENDING_AI)))
         scores["scanned" if claim.claim_number.endswith("-S") else "clean"].add(
-            claim.claim_number, json.loads(path.read_text()), flags, pending)
+            claim.claim_number, json.loads(path.read_text()), flags, pending,
+            claim.risk_band.value if claim.risk_band else None)
     return scores

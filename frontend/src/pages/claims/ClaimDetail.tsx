@@ -2,12 +2,21 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
 import { api } from "../../api/client";
-import { DOC_TYPE_LABELS, STAGE_LABELS, type Bbox, type ClaimDetail as Detail, type Focus } from "../../api/types";
+import {
+  DOC_TYPE_LABELS,
+  STAGE_LABELS,
+  type Bbox,
+  type ClaimDetail as Detail,
+  type Focus,
+  type ReviewSummary,
+} from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import { ACTIVE, StatusTag, fileSize, seconds, when } from "./common";
 import ClaimRecordView from "./ClaimRecordView";
+import DecisionPanel from "./DecisionPanel";
 import FindingsView from "./FindingsView";
 import PageViewer from "./PageViewer";
+import ReviewHeader from "./ReviewHeader";
 
 export default function ClaimDetail() {
   const { id } = useParams<{ id: string }>();
@@ -18,11 +27,21 @@ export default function ClaimDetail() {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<"findings" | "record" | "pages">("findings");
   const [focus, setFocus] = useState<Focus | null>(null);
-  const showOnPage = (pageId: string, bbox: Bbox | null) => {
-    setFocus({ pageId, bbox, stamp: Date.now() });
-    setTab("pages");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  const [review, setReview] = useState<ReviewSummary | null>(null);
+  const [reviewKey, setReviewKey] = useState(0);
+  // On the review tab the page sits beside the findings; from the claim record it opens the Documents tab.
+  const showOnPage = useCallback(
+    (pageId: string, bbox: Bbox | null, jump = false) => {
+      setFocus({ pageId, bbox, stamp: Date.now() });
+      if (tab === "record") {
+        setTab("pages");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else if (jump && tab === "findings" && window.innerWidth <= 1200) {
+        document.getElementById("review-viewer")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    },
+    [tab],
+  );
   const warnings = (location.state as { warnings?: string[] } | null)?.warnings ?? [];
 
   const load = useCallback(async () => {
@@ -37,6 +56,24 @@ export default function ClaimDetail() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadReview = useCallback(async () => {
+    try {
+      setReview(await api.get<ReviewSummary>(`/claims/${id}/review`));
+    } catch {
+      // the claim card still shows; the review header waits for the next refresh
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadReview();
+  }, [loadReview, reviewKey, claim?.status, claim?.processing_finished_at]);
+
+  const afterReview = (r?: ReviewSummary) => {
+    if (r) setReview(r);
+    else setReviewKey((k) => k + 1);
+    load();
+  };
 
   const active = !!claim && ACTIVE.includes(claim.status);
   useEffect(() => {
@@ -104,7 +141,13 @@ export default function ClaimDetail() {
         </div>
       )}
 
-      <div className="card">
+      {review && review.band !== null && <ReviewHeader review={review} onChanged={(r) => afterReview(r)} />}
+
+      <details className="card file-details" open={!review || review.band === null}>
+        <summary>
+          File details · {claim.documents} file{claim.documents === 1 ? "" : "s"}, {claim.pages} pages
+        </summary>
+      <div>
         <dl className="facts">
           <div>
             <dt>Stage</dt>
@@ -189,9 +232,11 @@ export default function ClaimDetail() {
         </table>
       </div>
 
+      </details>
+
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === "findings"} className={tab === "findings" ? "tab active" : "tab"} onClick={() => setTab("findings")}>
-          Findings
+          Review
         </button>
         <button role="tab" aria-selected={tab === "record"} className={tab === "record" ? "tab active" : "tab"} onClick={() => setTab("record")}>
           Claim record
@@ -201,12 +246,25 @@ export default function ClaimDetail() {
         </button>
       </div>
       {tab === "findings" ? (
-        <FindingsView
-          claimId={claim.id}
-          canReview={can("claims.review") || can("claims.investigate")}
-          onShow={showOnPage}
-          refreshKey={`${claim.status}-${claim.processing_finished_at ?? ""}`}
-        />
+        <div className="review-layout">
+          <div className="review-left">
+            <FindingsView
+              claimId={claim.id}
+              canReview={can("claims.review") || can("claims.investigate")}
+              canSettleMedical={can("claims.review_escalated")}
+              locked={claim.status === "decided"}
+              onShow={showOnPage}
+              onChanged={() => afterReview()}
+              refreshKey={`${claim.processing_finished_at ?? ""}`}
+            />
+            {review && review.band !== null && (
+              <DecisionPanel review={review} onDecided={(r) => afterReview(r)} refreshKey={String(reviewKey)} />
+            )}
+          </div>
+          <div className="review-right" id="review-viewer">
+            <PageViewer claim={claim} canEditType={false} onChanged={setClaim} focus={focus} compact />
+          </div>
+        </div>
       ) : tab === "record" ? (
         <ClaimRecordView
           claimId={claim.id}

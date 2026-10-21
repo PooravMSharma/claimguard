@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.claim import Claim, ClaimDocument
 from app.models.enums import ClaimStage, ClaimStatus
+from app.review import sla
 from app.services.queue import job_queue
 from app.services.storage import Storage, get_storage
 
@@ -170,7 +171,8 @@ def create_claim(
 
     claim = Claim(id=uuid.uuid4(), claim_number=number, stage=stage, status=ClaimStatus.RECEIVED,
                   policy_number=(policy_number or "").strip() or None,
-                  member_name=(member_name or "").strip() or None, created_by_id=uploaded_by, source=source)
+                  member_name=(member_name or "").strip() or None, created_by_id=uploaded_by, source=source,
+                  sla_due_at=None if source == "synthetic" else sla.due_at(stage))
     db.add(claim)
     result = IntakeResult(claim)
     store = storage()

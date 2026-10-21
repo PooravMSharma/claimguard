@@ -8,12 +8,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, require_permission
+from app.api.routes.review import mark_in_review
 from app.core.permissions import Permission, has_permission
 from app.db.session import get_db
 from app.models.claim import Claim
 from app.models.enums import ClaimStatus, ReviewAction
 from app.models.rules import CheckRun, Finding, FindingReview, Rule
 from app.models.user import User
+from app.review.scoring import latest_status
 from app.rules.catalogue import CHECKS, SEVERITY_ORDER
 from app.schemas.findings import (
     CheckRunOut,
@@ -58,7 +60,7 @@ def _finding_out(f: Finding, names: dict[uuid.UUID, str]) -> FindingOut:
         evidence=[EvidenceOut(**e) for e in (f.evidence or [])], amount_at_stake=f.amount_at_stake,
         suggested_deduction=f.suggested_deduction, confidence=f.confidence,
         needs_medical_review=f.needs_medical_review, model_version=f.model_version, is_current=f.is_current,
-        status=reviews[-1].action.value if reviews else "open", created_at=f.created_at,
+        status=latest_status(reviews), created_at=f.created_at,
         reviews=[ReviewOut(id=r.id, action=r.action.value, reason=r.reason, created_at=r.created_at,
                            reviewer=names.get(r.reviewer_id) if r.reviewer_id else None) for r in reviews])
 
@@ -117,7 +119,17 @@ def review(finding_id: uuid.UUID, body: ReviewIn, request: Request, db: Session 
     reason = (body.reason or "").strip() or None
     if body.action == "dismissed" and not reason:
         raise HTTPException(status_code=422, detail="Give a reason for dismissing a finding")
+    if body.action == "noted" and not reason:
+        raise HTTPException(status_code=422, detail="Write the note")
+    if (body.action != "noted" and finding.needs_medical_review
+            and not has_permission(user.role.name, Permission.CLAIMS_REVIEW_ESCALATED)):
+        raise HTTPException(status_code=403, detail="A medical-necessity finding is settled by a senior / medical "
+                                                    "reviewer. Add a note, or escalate the claim.")
     db.add(FindingReview(finding_id=finding.id, reviewer_id=user.id, action=ReviewAction(body.action), reason=reason))
+    if body.action != "noted":
+        db.flush()
+        db.refresh(finding)
+        mark_in_review(db, claim)
     log_event(db, f"finding.{body.action}", entity_type="finding", entity_id=finding.id, user_id=user.id,
               request=request, details={"claim_id": str(claim.id), "rule_id": finding.rule_id, "reason": reason})
     db.commit()
