@@ -1,7 +1,9 @@
 """Score the checks against the synthetic ground truth (python -m app.cli evaluate-checks).
 
 For every synthetic claim that is ready for review, the checks that raised a current finding are compared with
-ground_truth.json -> expected_checks. AI checks (Step 10) are left out of both sides.
+ground_truth.json -> expected_checks. A check that did not run on a claim because it is still waiting for the AI
+reviewer (status pending_ai in check_runs) is left out of both sides for that claim, so a rules-only run is
+scored on the rule checks alone. The AI checks are also reported on their own line.
 
   recall     seeded issues that were found
   precision  flags that match a seeded issue (or a documented side effect of one)
@@ -19,11 +21,9 @@ from sqlalchemy.orm import Session
 
 from app.models.claim import Claim
 from app.models.enums import ClaimStatus
-from app.models.rules import Finding
+from app.models.rules import CheckRun, Finding
 from app.rules.catalogue import CHECKS, SEVERITY_ORDER, expected_band
-from app.rules.engine import PENDING_AI_CHECKS
-
-RULE_CHECKS = [c for c in CHECKS if c not in PENDING_AI_CHECKS]
+from app.rules.engine import AI_CHECKS, PENDING_AI
 
 
 @dataclass
@@ -32,15 +32,19 @@ class Score:
     genuine: int = 0
     genuine_with_red: int = 0
     band_agree: int = 0
+    ai_pending: int = 0                       # claims on which AI checks were still pending
     found: Counter = field(default_factory=Counter)
     missed: Counter = field(default_factory=Counter)
     extra: Counter = field(default_factory=Counter)
     examples: dict[str, list[str]] = field(default_factory=lambda: defaultdict(list))
 
-    def add(self, claim_number: str, truth: dict, flags: dict[str, list[tuple[str, str]]]) -> None:
+    def add(self, claim_number: str, truth: dict, flags: dict[str, list[tuple[str, str]]],
+            pending: set[str] | None = None) -> None:
+        pending = pending or set()
         self.claims += 1
-        expected = set(truth["expected_checks"]) - set(PENDING_AI_CHECKS)
-        got = {c for c in flags if c not in PENDING_AI_CHECKS}
+        self.ai_pending += bool(pending & set(AI_CHECKS))
+        expected = set(truth["expected_checks"]) - pending
+        got = {c for c in flags if c not in pending}
         for c in expected:
             (self.found if c in got else self.missed)[c] += 1
             if c not in got:
@@ -71,7 +75,12 @@ class Score:
         lines = [f"{label} ({self.claims} claims): recall {found}/{seeded} = {self.recall:.1%} | precision "
                  f"{self.precision:.1%} | genuine claims with a red: {self.genuine_with_red}/{self.genuine} | "
                  f"band agrees on {self.band_agree}/{self.claims}"]
-        weak = [c for c in RULE_CHECKS if self.missed[c] or self.extra[c]]
+        ai_found = sum(self.found[c] for c in AI_CHECKS)
+        ai_seeded = ai_found + sum(self.missed[c] for c in AI_CHECKS)
+        ai_extra = sum(self.extra[c] for c in AI_CHECKS)
+        lines.append(f"   AI checks: found {ai_found}/{ai_seeded}, extra {ai_extra}"
+                     + (f" | still pending on {self.ai_pending} claim(s)" if self.ai_pending else ""))
+        weak = [c for c in CHECKS if self.missed[c] or self.extra[c]]
         if weak:
             lines.append("   by check: " + ", ".join(
                 f"{c} found {self.found[c]}/{self.found[c] + self.missed[c]} extra {self.extra[c]}" for c in weak))
@@ -93,6 +102,8 @@ def evaluate(db: Session, folder: Path) -> dict[str, Score]:
         flags: dict[str, list[tuple[str, str]]] = defaultdict(list)
         for f in db.scalars(select(Finding).where(Finding.claim_id == claim.id, Finding.is_current.is_(True))):
             flags[f.rule_id].append((f.severity.value, f.title))
+        pending = set(db.scalars(select(CheckRun.rule_id).where(CheckRun.claim_id == claim.id,
+                                                                 CheckRun.status == PENDING_AI)))
         scores["scanned" if claim.claim_number.endswith("-S") else "clean"].add(
-            claim.claim_number, json.loads(path.read_text()), flags)
+            claim.claim_number, json.loads(path.read_text()), flags, pending)
     return scores

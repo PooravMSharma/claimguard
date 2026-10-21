@@ -185,7 +185,7 @@ def step_extract(db: Session, claim: Claim) -> None:
 
 
 def step_checks(db: Session, claim: Claim) -> None:
-    """Step 9: run the check catalogue over the claim record and store findings with their evidence."""
+    """Steps 9-10: run the check catalogue (rules, then the AI reviewer when configured) and store findings."""
     from app.rules.store import run_for_claim
 
     counts = run_for_claim(db, claim)

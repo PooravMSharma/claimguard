@@ -7,6 +7,7 @@ raises it, it stays as history with is_current = False.
 
 import uuid
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -16,13 +17,17 @@ from app.extraction.evaluate import docs_from_db
 from app.extraction.model import Value
 from app.models.claim import Claim, ClaimDocument, DocumentPage
 from app.models.enums import RuleLayer, RuleMethod, RuleStatus, Severity
-from app.models.extraction import ExtractedDocument, ExtractedField
+from app.models.extraction import AiCall, AiCheckCache, ExtractedDocument, ExtractedField
 from app.models.rules import CheckRun, Finding, FindingReview, Rule
 from app.rules.catalogue import CHECKS
 from app.rules.context import ClaimContext, Facts, OriginalFile, Page
 from app.rules.defaults import default_config, default_status, default_weight
 from app.rules.engine import Outcome, RuleView
 from app.rules.reference import Reference
+
+if TYPE_CHECKING:
+    from app.ai.client import AIResult
+    from app.rules.ai_review import AiReviewer
 
 LAYER = {"medical": RuleLayer.MEDICAL_NECESSITY}
 
@@ -56,7 +61,7 @@ def sync_rules(db: Session) -> dict[str, RuleView]:
 
 
 def load_context(db: Session, claim: Claim, ref: Reference | None = None,
-                 read_file: Callable[[str], bytes] | None = None) -> ClaimContext:
+                 read_file: Callable[[str], bytes] | None = None, ai: "AiReviewer | None" = None) -> ClaimContext:
     """The claim as the checks see it: documents with reviewer corrections applied, pages, original files."""
     pages = db.execute(select(DocumentPage, ClaimDocument).join(ClaimDocument)
                        .where(ClaimDocument.claim_id == claim.id)
@@ -77,19 +82,20 @@ def load_context(db: Session, claim: Claim, ref: Reference | None = None,
             f.corrected_value, normalize(f.field_name, f.corrected_value) or f.corrected_value,
             old.page_id if old else (str(f.source_page_id) if f.source_page_id else None),
             old.bbox if old else None, 1.0, "reviewer")
-    page_list = [Page(str(p.id), getattr(p.doc_type, "value", str(p.doc_type)), p.text_source or "ocr",
-                      p.quality_flag, p.image_hash, str(p.document_id)) for p, _ in pages]
     if read_file is None:
         from app.services import intake
 
         read_file = intake.storage().get
     reader = read_file
+    page_list = [Page(str(p.id), getattr(p.doc_type, "value", str(p.doc_type)), p.text_source or "ocr",
+                      p.quality_flag, p.image_hash, str(p.document_id), p.page_number,
+                      (lambda key=p.image_key: reader(key)) if p.image_key else None) for p, _ in pages]
     files = [OriginalFile(str(d.id), d.filename, d.content_type, lambda key=d.storage_key: reader(key))
              for d in db.scalars(select(ClaimDocument).where(ClaimDocument.claim_id == claim.id)
                                  .order_by(ClaimDocument.uploaded_at))]
     stage = getattr(claim.stage, "value", str(claim.stage))
     return ClaimContext(Facts(claim.claim_number, stage, claim.source), docs, page_list,
-                        ref or Reference.from_db(db), files)
+                        ref or Reference.from_db(db), files, ai=ai)
 
 
 def save_outcomes(db: Session, claim_id: uuid.UUID, outcomes: list[Outcome]) -> dict[str, int]:
@@ -118,7 +124,8 @@ def save_outcomes(db: Session, claim_id: uuid.UUID, outcomes: list[Outcome]) -> 
                            severity=Severity(f.severity), title=f.title, explanation=f.explanation,
                            evidence=f.evidence, amount_at_stake=f.amount_at_stake,
                            suggested_deduction=f.suggested_deduction, confidence=f.confidence,
-                           needs_medical_review=f.needs_medical_review, fingerprint=f.fingerprint, is_current=True))
+                           needs_medical_review=f.needs_medical_review, model_version=f.model_version,
+                           fingerprint=f.fingerprint, is_current=True))
     for fingerprint, finding in kept.items():
         if fingerprint not in raised:
             finding.is_current = False
@@ -126,10 +133,57 @@ def save_outcomes(db: Session, claim_id: uuid.UUID, outcomes: list[Outcome]) -> 
     return counts
 
 
-def run_for_claim(db: Session, claim: Claim, ref: Reference | None = None) -> dict[str, int]:
-    """Load, run every check, save. Returns counts by severity."""
-    from app.rules.engine import run_checks
+class DbCache:
+    """AI reviewer answers kept in ai_check_cache (see AiReviewer)."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get(self, key: str) -> dict | None:
+        row = self.db.get(AiCheckCache, key)
+        return row.response if row is not None else None
+
+    def put(self, key: str, purpose: str, model: str, data: dict) -> None:
+        if self.db.get(AiCheckCache, key) is None:
+            self.db.add(AiCheckCache(key=key, purpose=purpose, model=model[:120], response=data))
+            self.db.flush()
+
+
+def reviewer_for(db: Session, claim: Claim) -> "AiReviewer | None":
+    """The AI reviewer for one claim run, or None when no model is configured or AI_CHECKS is off.
+
+    Every call is logged to ai_calls (purpose "check:..."); answers served from the cache are logged with
+    status "cached" so the cost report shows what was reused.
+    """
+    from app.ai.client import get_check_provider
+    from app.rules.ai_review import AiReviewer
+
+    provider = get_check_provider()
+    if provider is None:
+        return None
+
+    def log_call(purpose: str, result: "AIResult | None", error: str | None, cached: bool) -> None:
+        db.add(AiCall(claim_id=claim.id, purpose=purpose, provider=result.provider if result else provider.name,
+                      model=result.model if result else provider.model,
+                      input_tokens=result.input_tokens if result else 0,
+                      output_tokens=result.output_tokens if result else 0,
+                      cost_usd=result.cost_usd if result else 0, duration_ms=result.duration_ms if result else 0,
+                      status="cached" if cached else ("ok" if result else "error"), error=error))
+        db.flush()
+
+    return AiReviewer(provider, DbCache(db), log_call)
+
+
+def run_for_claim(db: Session, claim: Claim, ref: Reference | None = None, use_ai: bool = True) -> dict[str, int]:
+    """Load, run every check, save. Returns counts by severity, plus checks still waiting for the AI."""
+    from app.rules.engine import PENDING_AI, run_checks
 
     rules = sync_rules(db)
-    ctx = load_context(db, claim, ref)
-    return save_outcomes(db, claim.id, run_checks(ctx, rules))
+    ai = reviewer_for(db, claim) if use_ai else None
+    ctx = load_context(db, claim, ref, ai=ai)
+    outcomes = run_checks(ctx, rules)
+    counts = save_outcomes(db, claim.id, outcomes)
+    counts["pending_ai"] = sum(1 for o in outcomes if o.status == PENDING_AI)
+    if ai is not None and ai.fatal:
+        counts["ai_unavailable"] = 1
+    return counts

@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     ai_api_key: str = ""
     ai_model: str = "claude-sonnet-5-5"
     ai_extraction: str = "gaps"          # off | gaps (scans and incomplete documents) | all
+    ai_checks: bool = True               # AI judgement checks (M-01, M-02, M-04, M-06, X-08, B-11 + AI parts)
     ai_max_calls_per_claim: int = 25
     ai_timeout_seconds: int = 120
     ai_parallel_calls: int = 4

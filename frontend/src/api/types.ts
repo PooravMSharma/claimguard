@@ -471,6 +471,7 @@ export interface Finding {
   suggested_deduction: string | null;
   confidence: number | null;
   needs_medical_review: boolean;
+  model_version: string | null;
   is_current: boolean;
   status: "open" | "confirmed" | "dismissed";
   created_at: string;

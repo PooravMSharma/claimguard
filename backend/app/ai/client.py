@@ -238,9 +238,19 @@ def _provider(provider: str, key: str, model: str, timeout: int, base_url: str, 
 
 
 def get_provider() -> AIProvider | None:
-    """The configured provider, or None (rules only) when AI is off or not configured."""
+    """The provider for reading documents, or None (rules only) when AI_EXTRACTION is off or no AI is set up."""
     s = get_settings()
     if s.ai_extraction == "off":
         return None
+    return _configured()
+
+
+def get_check_provider() -> AIProvider | None:
+    """The provider for the AI judgement checks, or None when AI_CHECKS is false or no AI is set up."""
+    return _configured() if get_settings().ai_checks else None
+
+
+def _configured() -> AIProvider | None:
+    s = get_settings()
     return _provider(s.ai_provider.strip().lower(), s.ai_api_key.strip(), s.ai_model.strip(), s.ai_timeout_seconds,
                      s.ai_base_url.strip(), s.ai_vision, s.ai_context_tokens, s.ai_keep_alive)

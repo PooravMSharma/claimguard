@@ -11,6 +11,8 @@ from pathlib import Path
 
 # Faster password hashing in tests only (must be set before the app reads settings).
 os.environ.setdefault("BCRYPT_ROUNDS", "4")
+# Tests never call a real AI model: the AI judgement checks are off unless a test passes a fake reviewer.
+os.environ["AI_CHECKS"] = "false"
 
 import pytest  # noqa: E402
 from alembic import command  # noqa: E402

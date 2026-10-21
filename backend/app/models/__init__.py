@@ -4,6 +4,7 @@ from app.models.claim import Claim, ClaimDocument, DocumentPage
 from app.models.decision import Decision
 from app.models.extraction import (
     AiCall,
+    AiCheckCache,
     BillLineItem,
     Diagnosis,
     ExtractedDocument,
@@ -30,6 +31,7 @@ from app.models.user import AuditLog, Role, User
 __all__ = [
     "AuditLog",
     "AiCall",
+    "AiCheckCache",
     "BillLineItem",
     "CheckRun",
     "ExtractedDocument",

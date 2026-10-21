@@ -57,7 +57,7 @@ def _finding_out(f: Finding, names: dict[uuid.UUID, str]) -> FindingOut:
         layer=check.layer if check else "", severity=f.severity.value, title=f.title, explanation=f.explanation,
         evidence=[EvidenceOut(**e) for e in (f.evidence or [])], amount_at_stake=f.amount_at_stake,
         suggested_deduction=f.suggested_deduction, confidence=f.confidence,
-        needs_medical_review=f.needs_medical_review, is_current=f.is_current,
+        needs_medical_review=f.needs_medical_review, model_version=f.model_version, is_current=f.is_current,
         status=reviews[-1].action.value if reviews else "open", created_at=f.created_at,
         reviews=[ReviewOut(id=r.id, action=r.action.value, reason=r.reason, created_at=r.created_at,
                            reviewer=names.get(r.reviewer_id) if r.reviewer_id else None) for r in reviews])

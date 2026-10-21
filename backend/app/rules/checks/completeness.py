@@ -2,10 +2,19 @@
 
 import re
 
+from app.extraction.model import DocExtract, Value
 from app.models.enums import BillCategory
 from app.rules.checks.common import doc_evidence, label, rs, similar
-from app.rules.context import ClaimContext
-from app.rules.engine import Flag, Result, check, flagged, not_applicable, not_evaluable, passed
+from app.rules.context import ClaimContext, Evidence
+from app.rules.engine import (
+    Flag,
+    Result,
+    check,
+    flagged,
+    not_applicable,
+    not_evaluable,
+    passed,
+)
 from app.rules.reference import norm
 
 MEDICAL_MANAGEMENT = re.compile(r"(?i)^\s*(medical management|conservative|nil|none|not applicable|-)\s*$")
@@ -62,8 +71,8 @@ def discharge_summary_signed(ctx: ClaimContext) -> Result:
     if not problems:
         return passed("Signed, with the doctor's registration number.")
     if ctx.scanned(doc) and not (signed is not None and signed.method in ("ai", "reviewer")):
-        # OCR missing a signature or a number is weak evidence that it is not on the paper
-        return not_evaluable("Signature / registration number not found by OCR on the scan; check it on the page.")
+        # OCR missing a signature or a number is weak evidence that it is not on the paper: look at the page
+        return _signature_on_scan(ctx, doc, signed)
     evidence = [ctx.ev(doc, signed, "Signature: not found")] if signed is not None and signed.page_id else []
     if not evidence:
         evidence = [doc_evidence(ctx, doc, "Discharge summary")]
@@ -72,6 +81,35 @@ def discharge_summary_signed(ctx: ClaimContext) -> Result:
         "Discharge summary not properly signed",
         f"The discharge summary has {' and '.join(problems)}. IRDAI-standard claim documents need the treating "
         "doctor's signature, stamp and registration number.", evidence, key="|".join(problems)))
+
+
+def _signature_on_scan(ctx: ClaimContext, doc: DocExtract, signed: Value | None) -> Result:
+    """AI part of C-02: the model looks at the page where the doctor signs (vision models only)."""
+    unclear = "Signature / registration number not found by OCR on the scan; check it on the page."
+    page_id = signed.page_id if signed is not None and signed.page_id else (doc.page_ids[-1] if doc.page_ids else None)
+    page = ctx.page(page_id) if page_id else None
+    if ctx.ai is None or page is None or page.image is None or not ctx.ai.vision:
+        return not_evaluable(unclear)
+    seen = ctx.ai.signature(page.image())
+    if seen is None:
+        return not_evaluable(unclear + " " + ctx.ai.unavailable("check:signature"))
+    reg = seen["registration_number"]
+    if seen["signature"] == "present" and (reg or seen["stamp"] == "present"):
+        return passed("AI: doctor's signature" + (f" and registration number {reg}" if reg else " and stamp")
+                      + " seen on the page.")
+    if seen["signature"] != "absent":
+        return not_evaluable(unclear + " The AI reviewer could not tell either.")
+    problems = ["no doctor's signature"]
+    if seen["stamp"] == "absent":
+        problems.append("no stamp")
+    if not reg:
+        problems.append("no registration number of the treating doctor")
+    return flagged(Flag(
+        "Discharge summary not properly signed",
+        f"The AI reviewer looked at the page and found {', '.join(problems)}. IRDAI-standard claim documents need "
+        "the treating doctor's signature, stamp and registration number. Confirm on the page.",
+        [Evidence(doc.key, page_id, None, "Signature area: " + ", ".join(problems), False)],
+        key="|".join(problems), model=ctx.ai.model_version))
 
 
 @check("C-03")

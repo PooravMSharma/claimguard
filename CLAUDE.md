@@ -41,15 +41,16 @@ backend/
     models/        SQLAlchemy models (claim, extraction, reference, rules, decision, user, enums)
     pipeline/      pages -> read (OCR/classify) -> extract; runner.py holds STEPS
     rules/         catalogue.py: the 45 check IDs (single source of truth); engine.py (runs checks, severity
-                   policy); context.py (claim as checks see it); checks/ (one function per check, by layer);
-                   reference.py (lookups); defaults.py (thresholds); store.py (rules table, save findings);
-                   evaluate.py (score vs synthetic truth)
+                   policy); context.py (claim as checks see it); checks/ (one function per check, by layer;
+                   judgement.py = the AI checks); ai_review.py (AI reviewer: facts pack, questions, cache);
+                   pdf_fonts.py (fonts in digital PDFs, F-02/F-04); reference.py (lookups); defaults.py
+                   (thresholds); store.py (rules table, save findings, AI cache/log); evaluate.py (score vs truth)
     schemas/       pydantic API schemas
     services/      intake, storage (local/S3), queue, audit, users, login_guard, reference importers
     synthetic/     synthetic claim generator (ground truth for every check)
     worker/        RQ entry point and jobs
     cli.py         admin commands (see below)
-  migrations/versions/   0001..0006 (Alembic)
+  migrations/versions/   0001..0008 (Alembic)
   reference_data/        bundled defaults; raw/ holds official files (CGHS, HBP) when supplied
   tests/
 frontend/src/
@@ -85,7 +86,7 @@ reprocess-synthetic [--scanned|--clean] [--limit N]
 evaluate-reading                             # page types + OCR vs ground truth
 evaluate-extraction [--misses N]             # claim record vs ground truth, AI calls and time
 ai-check                                     # one test request to the configured AI model (run in worker)
-run-checks --synthetic | --claim CG-...      # re-run the checks on stored claim records (no re-reading)
+run-checks --synthetic | --claim CG-... [--no-ai] [--limit N]   # re-run checks on stored records (no re-reading)
 evaluate-checks [--misses N]                 # findings vs ground truth: recall, precision, false reds, band
 
 # Synthetic data (deterministic, seed 42): writes backend/synthetic_data/ (gitignored)
@@ -101,6 +102,7 @@ docker compose exec backend python -m app.synthetic --count 300
 AI_PROVIDER=ollama            # or anthropic (needs AI_API_KEY and credit); blank = rules only
 AI_MODEL=qwen2.5vl:7b
 AI_EXTRACTION=gaps            # off | gaps (all scanned docs + docs with missing items) | all
+AI_CHECKS=true                # AI judgement checks (default true when AI_PROVIDER is set)
 AI_PARALLEL_CALLS=1           # 1 for a local model
 AI_TIMEOUT_SECONDS=600
 AI_IMAGE_MAX_SIDE=1280
@@ -113,15 +115,23 @@ Build plan: 14 steps.
 - Done:
   1–5: foundation, auth/roles/audit, reference data, synthetic generator.
   6: intake/queue. 7: page reading. 8: structured claim record + AI reader (Ollama).
-  9: rule engine: 37 deterministic checks run as the pipeline's `checks` step; the 8 AI judgement checks
-  (F-02, F-04, X-08, M-01, M-02, M-04, M-06, B-11) report `pending_ai`.
+  9: rule engine: 37 deterministic checks run as the pipeline's `checks` step.
+  10: F-02/F-04 from fonts in digital PDFs (rules); AI reviewer for M-01, M-02, M-04, M-06, X-08, B-11 and the
+  AI halves of C-02 (signature on scans, vision), X-06 (same procedure in other words -> amber) and M-03
+  (documented reason for a repeat -> info). Without a model the AI checks report `pending_ai`.
 - Step 8 results: clean 100% key fields; scans with Ollama 87.1% key fields, 98.8% table rows.
 - Step 9 results (synthetic, deterministic checks):
   - Clean claims (300): recall 100%, precision 100%, no red on any genuine claim.
   - Scans read by rules only (82): precision 83%, recall 25%. Values OCR'd with confidence < 0.85 are not
     used to raise findings (the check reports "could not check" instead); the AI reader lifts this.
-- **Next: Step 10, AI checks** (the 8 pending ones, plus the AI halves of C-02, X-06, M-03).
-- Then: 11 scoring and review screen, 12 admin/rules management, 13 evaluation on freshly regenerated
+- Step 10 results:
+  - Offline (300 clean): F-02 4/4, F-04 4/4; each AI question is asked only on its 4 seeded claims (gates on
+    vitals, lab markers, test cost >= Rs. 3,000); genuine claims need no AI call.
+  - Mac with Ollama qwen2.5vl:7b (29 claims): clean 100% recall / 100% precision; AI checks found 1/1 on clean
+    and 1/1 on scans, 0 false flags. A 7B model asked open clinical questions over-flagged badly (4 false
+    flags in 8 claims), hence the gates. Sample is small: re-measure on more claims in Step 13.
+- **Next: Step 11, scoring and review screen.**
+- Then: 12 admin/rules management, 13 evaluation on freshly regenerated
   synthetic data, 14 hardening.
 - Still pending from the client: the official CGHS OM (03.10.2025, Annexure I) and the PM-JAY HBP 2022
   package list (backend/reference_data/raw/). Until then benchmarks are the synthetic SYN- set.
@@ -136,7 +146,7 @@ Build plan: 14 steps.
   - Values from either source go through `documents.normalize()` so they have the same shape.
 - **Reviewer corrections survive reprocessing** (`extraction/store.py` keeps them). Never overwrite them.
 - **Audit everything that changes state:** `services/audit.log_event(...)`.
-- **Schema changes = a new Alembic migration** in `migrations/versions/` (next is `0008_...`). Never edit an
+- **Schema changes = a new Alembic migration** in `migrations/versions/` (next is `0009_...`). Never edit an
   applied migration.
 - **Checks:** one function per check in `app/rules/checks/<layer>.py`, registered with `@check("B-01")`.
   Thresholds live in `rules.config` (defaults in `rules/defaults.py`), never in the check. A check returns
@@ -145,7 +155,11 @@ Build plan: 14 steps.
 - **Findings that a reviewer has confirmed or dismissed are never deleted**; re-runs match them by fingerprint.
 - **Fatal AI errors stop further calls for that claim.** Fatal means no server, no model or no credit.
   The claim is still processed with rules only.
-- **Tests never call a real AI.** Use `FakeAI` / the fake Ollama server in `tests/test_ai_providers.py`.
+- **Tests never call a real AI.** Use `FakeAI` / the fake Ollama server in `tests/test_ai_providers.py`, or
+  `ScriptedAI` in `tests/test_ai_review.py`. `tests/conftest.py` forces `AI_CHECKS=false`.
+- **AI findings:** only an explicit negative verdict that cites real facts raises one; "unclear", no answer or
+  invented fact ids raise nothing. Questions are gated by the claim data (no ICU stay -> no ICU question).
+  AI findings carry `model_version` and are amber at most.
 - **Style:**
   - Ruff, line length 120.
   - Pyright: 0 errors expected.

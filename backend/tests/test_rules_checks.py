@@ -14,7 +14,7 @@ from pypdf import PdfWriter
 from app.extraction.model import DocExtract, Value
 from app.rules.catalogue import CHECKS
 from app.rules.context import ClaimContext, Facts, OriginalFile, Page
-from app.rules.engine import PENDING_AI_CHECKS, REGISTRY, run_checks
+from app.rules.engine import AI_CHECKS, REGISTRY, run_checks
 from app.rules.reference import HospitalRef, PackageRef, PolicyRef, Reference, TariffRef
 
 # ---------------------------------------------------------------- a genuine claim
@@ -172,10 +172,12 @@ def test_genuine_claim_raises_no_findings():
     found = {o.rule_id: o.findings[0].title for o in outcomes if o.findings}
     assert found == {}
     status = {o.rule_id: o.status for o in outcomes}
-    assert {status[c] for c in PENDING_AI_CHECKS} == {"pending_ai"}
+    # without an AI reviewer the judgement checks wait for it; X-08 needs no AI when the diagnosis is unchanged
+    assert {status[c] for c in AI_CHECKS if c != "X-08"} == {"pending_ai"}
+    assert status["X-08"] == "passed"
     assert status["B-01"] == status["X-01"] == status["P-01"] == status["R-01"] == "passed"
     assert status["C-05"] == "not_applicable"                    # not an accident case
-    assert set(REGISTRY) | set(PENDING_AI_CHECKS) == set(CHECKS)  # every check is implemented or pending AI
+    assert set(REGISTRY) == set(CHECKS)                           # every check is implemented
 
 
 # ---------------------------------------------------------------- one problem at a time

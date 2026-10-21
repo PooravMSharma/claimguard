@@ -1,7 +1,7 @@
 """M-layer (rule part): length of stay, day care, repeated imaging.
 
 Always amber at most and marked for medical review until a clinician has reviewed the rule. Judgements
-about whether care was needed (M-01, M-02, M-04, M-06) are made by the AI reviewer in Step 10.
+about whether care was needed (M-01, M-02, M-04, M-06) are in checks/judgement.py (AI reviewer).
 """
 
 from collections import defaultdict
@@ -10,8 +10,17 @@ from decimal import Decimal
 
 from app.models.enums import BillCategory
 from app.rules.checks.common import moment, rs, similar
+from app.rules.checks.judgement import evidence
 from app.rules.context import ClaimContext
-from app.rules.engine import Flag, Result, check, flagged, not_applicable, not_evaluable, passed
+from app.rules.engine import (
+    Flag,
+    Result,
+    check,
+    flagged,
+    not_applicable,
+    not_evaluable,
+    passed,
+)
 from app.rules.reference import norm
 
 
@@ -28,7 +37,7 @@ def repeated_tests(ctx: ClaimContext) -> Result:
                 groups[norm(d.fields["test"].text)].append((when, d))
     if not groups:
         return not_applicable("No " + " / ".join(sorted(k.split("_")[0] for k in kinds)) + " reports.")
-    flags = []
+    flags, repeats = [], []
     for reports in groups.values():
         reports.sort(key=lambda x: x[0])
         for (t1, d1), (t2, d2) in zip(reports, reports[1:]):
@@ -38,13 +47,30 @@ def repeated_tests(ctx: ClaimContext) -> Result:
             line = next((x for x in ctx.bill_lines if x.category == BillCategory.INVESTIGATION
                          and similar(x.description, test) >= 0.8), None)
             hours = (t2 - t1).total_seconds() / 3600
+            repeats.append(f"{test}: done at {moment(t1)} and again at {moment(t2)}")
             flags.append(Flag(
                 f"{test} repeated within {hours:.0f} hours",
                 f"{test} was done at {moment(t1)} and again at {moment(t2)}. Check the notes for a reason for "
                 "repeating it (a change in condition); without one the repeat may not be payable.",
                 [ctx.ev(d1, d1.fields["report_date"]), ctx.ev(d2, d2.fields["report_date"])],
                 amount_at_stake=line.amount if line else None, key=f"{norm(test)}|{t2.isoformat()}"))
-    return flagged(*flags, detail=f"{sum(len(v) for v in groups.values())} report(s) checked for repeats.")
+    detail = f"{sum(len(v) for v in groups.values())} report(s) checked for repeats."
+    if flags and ctx.ai is not None:
+        # AI part: a repeat with a documented reason (a change in condition) is shown as information only.
+        answers = ctx.ai.repeat_reasons(ctx, repeats)
+        if answers is None:
+            detail += " " + ctx.ai.unavailable("check:repeats")
+        else:
+            for flag, j in zip(flags, answers):
+                if j.verdict == "reason_documented" and j.facts:
+                    flag.severity = "info"
+                    flag.model = ctx.ai.model_version
+                    flag.explanation += f" The AI reviewer found a documented reason: {j.reason}"
+                    flag.evidence += evidence(ctx, j.facts)
+                elif j.verdict == "no_reason":
+                    flag.model = ctx.ai.model_version
+                    flag.explanation += " The AI reviewer found no documented reason in the notes."
+    return flagged(*flags, detail=detail)
 
 
 def _stay_is_clear(ctx: ClaimContext) -> bool:

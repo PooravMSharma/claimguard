@@ -17,11 +17,12 @@ Synthetic claims (after python -m app.synthetic):
     docker compose exec backend python -m app.cli evaluate-reading
     docker compose exec backend python -m app.cli reprocess-synthetic
 
-Checks (Step 9):
+Checks (Steps 9-10; the AI reviewer runs when AI_PROVIDER is set and AI_CHECKS is not false):
     docker compose exec backend python -m app.cli load-synthetic-reference      # synthetic benchmarks + registries
     docker compose exec backend python -m app.cli import-registries --folder reference_data/raw/registries \
         --version 2026-10 --source-name "Insurer extract 21 Oct 2026"
     docker compose exec backend python -m app.cli run-checks --synthetic        # or --claim CG-SYN-0001
+    docker compose exec backend python -m app.cli run-checks --synthetic --no-ai --limit 50   # rules only
     docker compose exec backend python -m app.cli evaluate-checks --misses 3
 
 AI model (after setting AI_PROVIDER / AI_MODEL in .env):
@@ -259,7 +260,7 @@ def load_synthetic_reference(folder: Path) -> None:
     import_registries_cmd(reg, "SYN-1", "Synthetic registries (ClaimGuard generator)")
 
 
-def run_checks_cmd(claim_number: str | None, synthetic: bool) -> None:
+def run_checks_cmd(claim_number: str | None, synthetic: bool, use_ai: bool = True, limit: int | None = None) -> None:
     from sqlalchemy import select
 
     from app.models.claim import Claim
@@ -274,21 +275,34 @@ def run_checks_cmd(claim_number: str | None, synthetic: bool) -> None:
         elif synthetic:
             stmt = stmt.where(Claim.source == "synthetic")
         claims = db.scalars(stmt.order_by(Claim.claim_number)).all()
+        if limit:
+            claims = claims[:limit]
         if not claims:
             print("No matching claims ready for review.")
             return
+        from app.ai.client import get_check_provider
+
+        provider = get_check_provider() if use_ai else None
+        if provider is not None:
+            print(f"AI reviewer: {provider.name} {provider.model} (cached answers are reused; a local model takes "
+                  "about a minute per claim the first time)", flush=True)
+        else:
+            print("AI reviewer off: the AI checks will report pending_ai.", flush=True)
         ref = Reference.from_db(db)       # load reference data once for all claims
         totals: Counter = Counter()
+        every = 1 if provider is not None else 25
         for n, claim in enumerate(claims, 1):
-            counts = run_for_claim(db, claim, ref)
+            counts = run_for_claim(db, claim, ref, use_ai=use_ai)
             log_event(db, "claim.checks_run", entity_type="claim", entity_id=claim.id,
                       details={**counts, "via": "cli run-checks"})
             db.commit()
             totals.update(counts)
-            if n % 25 == 0:
-                print(f"  {n} claims checked", flush=True)
+            if n % every == 0:
+                print(f"  {n}/{len(claims)} {claim.claim_number}: {counts['findings']} finding(s)"
+                      + (" (AI unavailable)" if counts.get("ai_unavailable") else ""), flush=True)
     print(f"Done: {len(claims)} claim(s) checked, {totals['findings']} findings "
-          f"({totals['red']} red, {totals['amber']} amber, {totals['info']} info).")
+          f"({totals['red']} red, {totals['amber']} amber, {totals['info']} info). "
+          f"AI checks still pending: {totals['pending_ai']}.")
 
 
 def _add_source_args(p: argparse.ArgumentParser) -> None:
@@ -351,6 +365,8 @@ def main(argv: list[str] | None = None) -> None:
     rc = sub.add_parser("run-checks", help="Run the checks again on claims that are ready for review")
     rc.add_argument("--claim", help="One claim number")
     rc.add_argument("--synthetic", action="store_true", help="All synthetic claims")
+    rc.add_argument("--no-ai", action="store_true", help="Rules only: skip the AI reviewer")
+    rc.add_argument("--limit", type=int, help="Only the first N claims (by claim number)")
     ec = sub.add_parser("evaluate-checks", help="Score the checks against the synthetic answers")
     ec.add_argument("--folder", type=Path, default=Path(__file__).resolve().parents[1] / "synthetic_data")
     ec.add_argument("--misses", type=int, default=0, help="Show up to N examples of missed and extra flags")
@@ -419,7 +435,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "run-checks":
         if not args.claim and not args.synthetic:
             parser.error("give --claim CG-... or --synthetic")
-        run_checks_cmd(args.claim, args.synthetic)
+        run_checks_cmd(args.claim, args.synthetic, use_ai=not args.no_ai, limit=args.limit)
     elif args.command == "evaluate-checks":
         from app.rules.evaluate import evaluate as evaluate_checks
 

@@ -25,8 +25,11 @@ log = logging.getLogger(__name__)
 PASSED, FLAGGED, NOT_APPLICABLE, NOT_EVALUABLE, PENDING_AI, DISABLED, ERROR = (
     "passed", "flagged", "not_applicable", "not_evaluable", "pending_ai", "disabled", "error")
 
-# Judgement checks done by the AI in Step 10. C-02, X-06 and M-03 have a rule part that runs now.
-PENDING_AI_CHECKS = ("F-02", "F-04", "X-08", "M-01", "M-02", "M-04", "M-06", "B-11")
+# Judgement checks made by the AI reviewer (app/rules/ai_review.py). Without one they report "pending_ai".
+# C-02, X-06 and M-03 have a rule part that always runs; the AI adds to it (AI_ASSISTED).
+AI_CHECKS = ("X-08", "M-01", "M-02", "M-04", "M-06", "B-11")
+AI_ASSISTED = ("C-02", "X-06", "M-03")
+PENDING_AI_CHECKS = AI_CHECKS          # kept for older imports
 
 
 @dataclass
@@ -39,6 +42,7 @@ class Flag:
     suggested_deduction: Decimal | float | int | None = None
     confidence: float | None = None
     key: str | None = None                      # what makes this flag the same flag next time
+    model: str | None = None                    # set when an AI model's judgement raised it
 
 
 @dataclass
@@ -58,6 +62,10 @@ def not_applicable(detail: str) -> Result:
 
 def not_evaluable(detail: str) -> Result:
     return Result(NOT_EVALUABLE, detail=detail)
+
+
+def pending_ai(detail: str) -> Result:
+    return Result(PENDING_AI, detail=detail)
 
 
 def flagged(*flags: Flag, detail: str | None = None) -> Result:
@@ -102,6 +110,7 @@ class FindingOut:
     needs_medical_review: bool
     fingerprint: str
     downgraded: bool = False
+    model_version: str | None = None
 
 
 @dataclass
@@ -132,7 +141,7 @@ def finalise(rule: RuleView, flag: Flag) -> FindingOut:
     fingerprint = hashlib.sha256(f"{rule.id}|{key}".encode()).hexdigest()[:40]
     return FindingOut(rule.id, severity, flag.title[:300], explanation, [e.as_json() for e in flag.evidence],
                       _money(flag.amount_at_stake), _money(flag.suggested_deduction), flag.confidence,
-                      medical, fingerprint, downgraded)
+                      medical, fingerprint, downgraded, flag.model)
 
 
 def _money(value: Decimal | float | None) -> Decimal | None:
@@ -146,18 +155,17 @@ def run_checks(ctx: ClaimContext, rules: dict[str, RuleView]) -> list[Outcome]:
     import app.rules.checks  # noqa: F401  (registers the check functions)
 
     outcomes = []
-    for rule_id in CHECKS:
-        rule = rules.get(rule_id) or default_rule(rule_id)
+    resolved = {rule_id: rules.get(rule_id) or default_rule(rule_id) for rule_id in CHECKS}
+    for rule_id, rule in resolved.items():      # all configs first: the AI questions read several of them
+        ctx.config[rule_id] = rule.config
+    for rule_id, rule in resolved.items():
         if rule.status == "disabled":
             outcomes.append(Outcome(rule_id, rule.version, DISABLED, "Rule is disabled"))
             continue
         fn = REGISTRY.get(rule_id)
         if fn is None:
-            status = PENDING_AI if rule_id in PENDING_AI_CHECKS else NOT_EVALUABLE
-            detail = "Needs the AI reviewer (Step 10)" if status == PENDING_AI else "Check not implemented"
-            outcomes.append(Outcome(rule_id, rule.version, status, detail))
+            outcomes.append(Outcome(rule_id, rule.version, NOT_EVALUABLE, "Check not implemented"))
             continue
-        ctx.config[rule_id] = rule.config
         try:
             result = fn(ctx)
         except Exception as exc:  # one check must never stop the others
@@ -167,12 +175,7 @@ def run_checks(ctx: ClaimContext, rules: dict[str, RuleView]) -> list[Outcome]:
         findings = [finalise(rule, f) for f in result.flags]
         seen: set[str] = set()
         unique = [f for f in findings if not (f.fingerprint in seen or seen.add(f.fingerprint))]
-        status = result.status
-        if rule_id in ("C-02", "X-06", "M-03") and status == PASSED:
-            detail = (result.detail + " " if result.detail else "") + "AI part pending (Step 10)."
-        else:
-            detail = result.detail
-        outcomes.append(Outcome(rule_id, rule.version, FLAGGED if unique else status, detail, unique))
+        outcomes.append(Outcome(rule_id, rule.version, FLAGGED if unique else result.status, result.detail, unique))
     return outcomes
 
 

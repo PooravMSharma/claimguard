@@ -97,6 +97,11 @@ function FindingCard({ f, canReview, onShow, onReviewed }: {
           {f.rule_id}
         </code>
         <h3>{f.title}</h3>
+        {f.model_version && (
+          <span className="tag tag-ai" title={`Raised or refined by the AI reviewer (${f.model_version}). Check the evidence before acting on it.`}>
+            AI
+          </span>
+        )}
         {f.status !== "open" && <span className={`tag review-${f.status}`}>{f.status}</span>}
       </header>
       <p className="finding-text">{f.explanation}</p>

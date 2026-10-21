@@ -19,7 +19,15 @@ from app.rules.checks.common import (
     similar,
 )
 from app.rules.context import ClaimContext
-from app.rules.engine import Flag, Result, check, flagged, not_applicable, not_evaluable, passed
+from app.rules.engine import (
+    Flag,
+    Result,
+    check,
+    flagged,
+    not_applicable,
+    not_evaluable,
+    passed,
+)
 from app.rules.reference import norm
 
 
@@ -204,7 +212,7 @@ def medicines_charted(ctx: ClaimContext) -> Result:
                                   "medicine(s).")
 
 
-ICU = re.compile(r"\b(icu|iccu|micu|sicu|nicu|picu|ccu|intensive care|hdu)\b", re.I)
+ICU = re.compile(r"\b(icu|iccu|micu|sicu|nicu|picu|ccu|intensive care|hdu)\b", re.IGNORECASE)
 
 
 @check("X-05")
@@ -260,7 +268,7 @@ def procedures_match(ctx: ClaimContext) -> Result:
         return not_applicable("No procedure billed or recorded.")
     if len(present) < 2:
         return passed("Only one document names the procedure.")
-    flags = []
+    flags, pairs = [], []
     names = list(present)
     for i, a in enumerate(names):
         for b in names[i + 1:]:
@@ -269,11 +277,29 @@ def procedures_match(ctx: ClaimContext) -> Result:
                     continue
                 theirs = "; ".join(p for _, _, p in present[b])
                 d2, v2, _ = present[b][0]
+                pairs.append((proc, theirs))
                 flags.append(Flag(
                     f"Procedure on the {a} differs from the {b}",
                     f"The {a} names '{proc}'; the {b} records '{theirs}'.",
                     [ctx.ev(doc, value, proc), ctx.ev(d2, v2, theirs)], key=f"{a}|{b}|{norm(proc)}"))
-    return flagged(*flags, detail="Compared: " + ", ".join(names) + ".")
+    detail = "Compared: " + ", ".join(names) + "."
+    if flags and ctx.ai is not None:
+        # AI part: the same operation written differently ("Lap. chole") is not a mismatch worth a red flag.
+        # The flag stays (a person confirms); only its severity and wording change.
+        verdicts = ctx.ai.same_procedure(pairs)
+        if verdicts is None:
+            detail += " " + ctx.ai.unavailable("check:procedures")
+        else:
+            for flag, verdict in zip(flags, verdicts):
+                if verdict == "same":
+                    flag.severity = "amber"
+                    flag.model = ctx.ai.model_version
+                    flag.explanation += (" The AI reviewer reads these as the same procedure written differently; "
+                                         "confirm on the documents and dismiss if so.")
+                elif verdict == "different":
+                    flag.model = ctx.ai.model_version
+                    flag.explanation += " The AI reviewer also reads them as different procedures."
+    return flagged(*flags, detail=detail)
 
 
 def _model_in(model: str, billed: str, slip: bool) -> bool:
@@ -283,7 +309,7 @@ def _model_in(model: str, billed: str, slip: bool) -> bool:
     if slip and len(model) >= 5:
         n = len(model)
         return any(sum(1 for a, b in zip(model, billed[i:i + n]) if a != b) <= 1
-                   for i in range(0, len(billed) - n + 1))
+                   for i in range(len(billed) - n + 1))
     return False
 
 

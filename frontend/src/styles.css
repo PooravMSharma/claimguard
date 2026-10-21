@@ -453,6 +453,12 @@ td > .tag:first-child {
   color: var(--bad);
 }
 
+.tag-ai {
+  border-color: var(--accent);
+  color: var(--accent);
+  cursor: help;
+}
+
 .pager {
   display: flex;
   align-items: center;

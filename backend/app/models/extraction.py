@@ -165,3 +165,19 @@ class AiCall(Base):
     status: Mapped[str] = mapped_column(String(10))          # ok | error
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AiCheckCache(Base):
+    """Answers of the AI reviewer, keyed by a hash of (model, question, claim facts).
+
+    Re-running the checks on an unchanged claim reuses the answer instead of asking the model again (a local
+    model takes a minute or more per claim). Any change to the facts, the question or the model is a new key.
+    """
+
+    __tablename__ = "ai_check_cache"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    purpose: Mapped[str] = mapped_column(String(80))
+    model: Mapped[str] = mapped_column(String(120))
+    response: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

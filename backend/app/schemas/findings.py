@@ -34,6 +34,7 @@ class FindingOut(BaseModel):
     suggested_deduction: Decimal | None
     confidence: float | None
     needs_medical_review: bool
+    model_version: str | None = None  # set when an AI model's judgement raised it
     is_current: bool
     status: str                      # open | confirmed | dismissed (latest review)
     created_at: datetime

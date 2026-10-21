@@ -1,5 +1,7 @@
-clean (20 claims): recall 14/14 = 100.0% | precision 100.0% | genuine claims with a red: 0/8 | band agrees on 20/20
-scanned (9 claims): recall 6/7 = 85.7% | precision 75.0% | genuine claims with a red: 0/3 | band agrees on 8/9
+clean (20 claims): recall 16/16 = 100.0% | precision 100.0% | genuine claims with a red: 0/8 | band agrees on 20/20
+   AI checks: found 1/1, extra 0
+scanned (9 claims): recall 7/8 = 87.5% | precision 77.8% | genuine claims with a red: 0/3 | band agrees on 8/9
+   AI checks: found 1/1, extra 0
    by check: F-01 found 0/1 extra 0, X-09 found 0/0 extra 1, R-01 found 0/0 extra 1
       extra R-01: CG-SYN-0029-S: Treating doctor's registration not found
       extra X-09: CG-SYN-0033-S: Hospital Rohini ID differs on the lab report

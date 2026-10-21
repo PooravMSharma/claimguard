@@ -11,12 +11,17 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from functools import cached_property
+from typing import TYPE_CHECKING
 
 from app.extraction.model import DocExtract, Value
 from app.extraction.store import bill_category
 from app.extraction.values import parse_datetime
 from app.models.enums import BillCategory
 from app.rules.reference import PackageRef, PolicyRef, Reference, norm
+
+if TYPE_CHECKING:
+    from app.rules.ai_review import AiReviewer
+    from app.rules.pdf_fonts import PdfWord
 
 SCAN_MIN_CONFIDENCE = 0.85
 
@@ -44,6 +49,8 @@ class Page:
     quality: str | None = None
     image_hash: str | None = None
     file_id: str | None = None
+    number: int | None = None                 # page number inside its file (1-based)
+    image: Callable[[], bytes] | None = None  # the stored page image (PNG), for the AI reviewer
 
 
 @dataclass
@@ -101,6 +108,30 @@ class ClaimContext:
     ref: Reference
     files: list[OriginalFile] = field(default_factory=list)
     config: dict[str, dict] = field(default_factory=dict)       # rule id -> merged config
+    ai: "AiReviewer | None" = None                              # Step 10: the AI reviewer, when configured
+    _pdfs: dict = field(default_factory=dict, repr=False)
+
+    def pdf_words(self, page: Page) -> "list[PdfWord] | None":
+        """Words with fonts from the original digital PDF behind this page; None for scans and images."""
+        if page.source != "text_layer" or page.number is None or page.file_id is None:
+            return None
+        if page.file_id not in self._pdfs:
+            f = next((x for x in self.files if x.id == page.file_id), None)
+            pdf = None
+            if f is not None and (f.content_type == "application/pdf" or f.name.lower().endswith(".pdf")):
+                try:
+                    import pypdfium2 as pdfium
+
+                    pdf = pdfium.PdfDocument(f.read())
+                except Exception:
+                    pdf = None
+            self._pdfs[page.file_id] = pdf
+        pdf = self._pdfs[page.file_id]
+        if pdf is None or page.number > len(pdf):
+            return None
+        from app.rules.pdf_fonts import page_words
+
+        return page_words(pdf, page.number - 1)
 
     # ------------------------------------------------------------ documents and values
 
@@ -116,6 +147,9 @@ class ClaimContext:
     @cached_property
     def _page_source(self) -> dict[str, str]:
         return {p.id: p.source for p in self.pages}
+
+    def page(self, page_id: str) -> Page | None:
+        return next((p for p in self.pages if p.id == page_id), None)
 
     def scanned(self, doc: DocExtract) -> bool:
         """Read by OCR rather than from a text layer: values can carry misreads."""
@@ -294,9 +328,7 @@ class ClaimContext:
         candidates = []
         for p in packages:
             keys = [k for k in p.keywords]
-            if category and any(k.upper() == category for k in keys):
-                candidates.append(p)
-            elif diagnosis and any(len(k) > 4 and norm(k) and norm(k) in diagnosis for k in keys):
+            if category and any(k.upper() == category for k in keys) or diagnosis and any(len(k) > 4 and norm(k) and norm(k) in diagnosis for k in keys):
                 candidates.append(p)
         if len(candidates) > 1:  # a medical and a surgical package for the same condition
             by_kind = [p for p in candidates if ("surgeon_fee" in p.inclusions) == surgical]
