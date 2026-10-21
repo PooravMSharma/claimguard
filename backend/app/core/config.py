@@ -43,8 +43,24 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # AI (Step 8). "ollama" (local model) or "anthropic" (with a key) turns it on; blank runs rules only.
     ai_provider: str = ""
     ai_api_key: str = ""
+    ai_model: str = "claude-sonnet-5-5"
+    ai_extraction: str = "gaps"          # off | gaps (scans and incomplete documents) | all
+    ai_max_calls_per_claim: int = 25
+    ai_timeout_seconds: int = 120
+    ai_parallel_calls: int = 4
+    ai_image_max_side: int = 1600        # page images are scaled down to this before sending
+    # Ollama only
+    ai_base_url: str = ""                # default http://host.docker.internal:11434 (Ollama on the host)
+    ai_vision: bool = True               # false for text-only models: send OCR text without page images
+    ai_context_tokens: int = 24576       # model context window; images + OCR text must fit
+    ai_keep_alive: str = "30m"           # keep the model loaded between calls
+    job_timeout_seconds: int = 10800     # longest a claim may take in the worker (local AI is slow)
+    # Estimated prices in USD per million tokens, for the cost log. Set them from your Anthropic plan.
+    ai_price_input_per_mtok: float = 3.0
+    ai_price_output_per_mtok: float = 15.0
 
     @property
     def is_development(self) -> bool:

@@ -15,11 +15,18 @@ Synthetic claims (after python -m app.synthetic):
     docker compose exec backend python -m app.cli import-synthetic --limit 50
     docker compose exec backend python -m app.cli import-synthetic --limit 20 --scanned
     docker compose exec backend python -m app.cli evaluate-reading
+    docker compose exec backend python -m app.cli reprocess-synthetic
+
+AI model (after setting AI_PROVIDER / AI_MODEL in .env):
+    docker compose exec worker python -m app.cli ai-check
+    docker compose exec backend python -m app.cli evaluate-extraction
 """
 
 import argparse
 import getpass
+import re
 import sys
+from collections import Counter
 from datetime import date
 from pathlib import Path
 
@@ -140,6 +147,78 @@ def import_synthetic(folder: Path, limit: int | None, scanned: bool, now: bool) 
     print(f"Done: {created} claims imported and {action}, {skipped} already there.")
 
 
+def reprocess_synthetic(scanned_only: bool, clean_only: bool, limit: int | None = None) -> None:
+    """Queue every synthetic claim for processing again (e.g. after a new pipeline step was added)."""
+    from sqlalchemy import select
+
+    from app.models.claim import Claim
+    from app.models.enums import ClaimStatus
+    from app.services import intake
+
+    queued = 0
+    with SessionLocal() as db:
+        waiting = [ClaimStatus.RECEIVED, ClaimStatus.READY_FOR_REVIEW, ClaimStatus.FAILED]
+        claims = db.scalars(select(Claim).where(Claim.source == "synthetic", Claim.status.in_(waiting))
+                            .order_by(Claim.claim_number)).all()
+        for claim in claims:
+            is_scan = claim.claim_number.endswith("-S")
+            if (scanned_only and not is_scan) or (clean_only and is_scan):
+                continue
+            if limit is not None and queued >= limit:
+                break
+            claim.status = ClaimStatus.RECEIVED
+            claim.processing_error = None
+            log_event(db, "claim.reprocess", entity_type="claim", entity_id=claim.id,
+                      details={"via": "cli reprocess-synthetic"})
+            queued += 1
+        db.commit()
+        for claim in claims:
+            if claim.status == ClaimStatus.RECEIVED:
+                intake.enqueue_processing(claim.id)
+    print(f"Done: {queued} synthetic claims queued for processing.")
+
+
+def ai_check() -> None:
+    """Send one small test request to the configured AI model and report what happened."""
+    import io
+    import time
+
+    from PIL import Image, ImageDraw, ImageFont
+
+    from app.ai.client import AIError, get_provider, image_block, text_block
+    from app.core.config import get_settings
+
+    s = get_settings()
+    provider = get_provider()
+    if provider is None:
+        print(f"AI is off (AI_PROVIDER={s.ai_provider!r}, AI_EXTRACTION={s.ai_extraction!r}"
+              f"{', no AI_API_KEY' if s.ai_provider.strip().lower() == 'anthropic' and not s.ai_api_key else ''}).")
+        sys.exit(1)
+    print(f"Provider {provider.name}, model {provider.model}. Sending a test page (the first call loads the model)...")
+    img = Image.new("L", (900, 300), 255)
+    ImageDraw.Draw(img).text((40, 100), "BILL NO: IPB/2026/4417", fill=0, font=ImageFont.load_default(size=56))
+    png = io.BytesIO()
+    img.save(png, "PNG")
+    started = time.monotonic()
+    try:
+        result = provider.structured(
+            system="Copy values exactly as printed on the image.",
+            content=[text_block("Read the bill number printed on this image."), text_block("Page 1 image:"),
+                     image_block(png.getvalue())],
+            tool_name="record", tool_description="Record the bill number.",
+            schema={"type": "object", "properties": {"bill_no": {"type": ["string", "null"]}},
+                    "required": ["bill_no"]}, max_tokens=200)
+    except AIError as exc:
+        print(f"FAILED: {exc}")
+        sys.exit(1)
+    seconds = time.monotonic() - started
+    answer = result.data.get("bill_no")
+    ok = str(answer or "").replace(" ", "").upper() == "IPB/2026/4417"
+    print(f"Answer: {answer!r} in {seconds:.1f}s ({result.input_tokens} tokens in, {result.output_tokens} out)")
+    print("OK: the model can read page images." if ok else
+          "Answered, but not the expected 'IPB/2026/4417'. Text-only model? Set AI_VISION=false or use a vision model.")
+
+
 def _add_source_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--file", type=Path, required=True, help="CSV or Excel file")
     p.add_argument("--sheet", help="Excel sheet name (default: first sheet)")
@@ -183,6 +262,14 @@ def main(argv: list[str] | None = None) -> None:
     syn.add_argument("--now", action="store_true", help="Process here instead of in the worker")
     ev = sub.add_parser("evaluate-reading", help="Score page types and OCR on imported synthetic claims")
     ev.add_argument("--folder", type=Path, default=Path(__file__).resolve().parents[1] / "synthetic_data")
+    ex = sub.add_parser("evaluate-extraction", help="Score the claim record against the synthetic answers")
+    ex.add_argument("--folder", type=Path, default=Path(__file__).resolve().parents[1] / "synthetic_data")
+    ex.add_argument("--misses", type=int, default=0, help="Show up to N wrong values per weak field")
+    sub.add_parser("ai-check", help="Send one test request to the configured AI model")
+    rp = sub.add_parser("reprocess-synthetic", help="Queue imported synthetic claims for processing again")
+    rp.add_argument("--scanned", action="store_true", help="Only the scanned copies (CG-SYN-xxxx-S)")
+    rp.add_argument("--clean", action="store_true", help="Only the clean copies")
+    rp.add_argument("--limit", type=int, help="Only the first N (by claim number)")
     args = parser.parse_args(argv)
 
     if args.command == "load-reference-defaults":
@@ -202,6 +289,45 @@ def main(argv: list[str] | None = None) -> None:
 
         with SessionLocal() as db:
             print(report(evaluate(db, args.folder)))
+    elif args.command == "evaluate-extraction":
+        from sqlalchemy import func, select
+
+        from app.extraction.evaluate import evaluate_db
+        from app.extraction.evaluate import report as extraction_report
+        from app.models.extraction import AiCall
+
+        with SessionLocal() as db:
+            for label, tally in evaluate_db(db, args.folder).items():
+                n = tally.claims
+                print(extraction_report(f"{label} ({n} claims)", tally) if n else f"{label}: no claims")
+                if args.misses:
+                    shown: Counter = Counter()
+                    for name, detail in tally.misses:
+                        if shown[name] < args.misses:
+                            shown[name] += 1
+                            if isinstance(detail, tuple) and len(detail) == 3:
+                                doc_type, want, got = detail
+                                print(f"      {name} ({doc_type}): expected {want!r} | got {got!r}")
+                            else:
+                                want, got = detail
+                                print(f"      {name}: expected {want!r}\n         got {got!r}")
+                if tally.not_extracted:
+                    print(f"   {tally.not_extracted} {label} claims not extracted yet (run reprocess-synthetic)")
+            calls, cost, failed = db.execute(select(func.count(), func.coalesce(func.sum(AiCall.cost_usd), 0),
+                                                    func.count().filter(AiCall.status == "error"))).one()
+            print(f"AI calls so far: {calls} ({failed} failed), estimated cost USD {float(cost):.4f}")
+            messages = db.scalars(select(AiCall.error).where(AiCall.status == "error")).all()
+            grouped = Counter(re.sub(r"'request_id': '[^']*'", "", m or "")[:300] for m in messages)
+            for error, count in grouped.most_common(3):
+                print(f"   {count}x error: {error}")
+            took = db.execute(select(AiCall.provider, func.count(), func.avg(AiCall.duration_ms))
+                              .where(AiCall.status == "ok").group_by(AiCall.provider)).all()
+            for provider_name, count, avg_ms in took:
+                print(f"   {provider_name}: {count} successful calls, average {float(avg_ms) / 1000:.1f}s each")
+    elif args.command == "ai-check":
+        ai_check()
+    elif args.command == "reprocess-synthetic":
+        reprocess_synthetic(args.scanned, args.clean, args.limit)
 
     if args.command == "create-admin":
         password = sys.stdin.readline().rstrip("\n") if args.password_stdin else _ask_password()

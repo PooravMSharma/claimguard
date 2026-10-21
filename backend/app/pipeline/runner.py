@@ -17,7 +17,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.claim import Claim, DocumentPage
+from app.models.claim import Claim, ClaimDocument, DocumentPage
 from app.models.enums import ClaimStatus, DocumentType
 from app.pipeline.classify import classify
 from app.pipeline.ocr import OcrJob, PageText, image_frames, pdf_page_job, quality, run_job
@@ -124,7 +124,67 @@ def step_read(db: Session, claim: Claim) -> None:
             db.flush()
 
 
-STEPS = [("pages", step_pages), ("read", step_read)]
+def step_extract(db: Session, claim: Claim) -> None:
+    """Structured claim record: rules on every document, the AI reader on scans and gaps."""
+    from app.ai.client import AIError, get_provider
+    from app.extraction import ai_extract, store
+    from app.extraction.documents import build_documents
+    from app.extraction.layout import words_of
+    from app.models.extraction import AiCall
+
+    settings = get_settings()
+    pages = db.scalars(select(DocumentPage).join(ClaimDocument).where(ClaimDocument.claim_id == claim.id)
+                       .order_by(ClaimDocument.uploaded_at, DocumentPage.page_number)).all()
+    records = [{"id": str(p.id), "file_id": str(p.document_id), "doc_type": getattr(p.doc_type, "value", p.doc_type),
+                "words": p.words or [], "quality": p.quality_flag, "text": p.ocr_text or "",
+                "source": p.text_source, "image_key": p.image_key} for p in pages]
+    by_id = {r["id"]: r for r in records}
+    docs = [d for d in build_documents([r for r in records if r["doc_type"] != "unknown"])]
+    corrections = store.clear(db, claim.id)
+
+    provider = get_provider()
+    if provider is not None:
+        def scanned(doc) -> bool:
+            return any(by_id[pid]["source"] != "text_layer" for pid in doc.page_ids)
+
+        todo = [d for d in docs if ai_extract.needs_ai(d, settings.ai_extraction, scanned(d))]
+        todo = todo[:settings.ai_max_calls_per_claim]
+        store_ = intake.storage()
+
+        stop: list[str] = []          # set after a fatal error: the remaining documents are not sent
+
+        def run(doc):
+            if stop:
+                return doc, None, None
+            pages_ = [by_id[pid] for pid in doc.page_ids]
+            images = [store_.get(p["image_key"]) for p in pages_ if p["image_key"]]
+            try:
+                return doc, ai_extract.read_with_ai(provider, doc, images, [p["text"] for p in pages_]), None
+            except AIError as exc:
+                if exc.fatal:
+                    stop.append(str(exc))
+                return doc, None, str(exc)
+
+        with ThreadPoolExecutor(max_workers=max(1, settings.ai_parallel_calls)) as pool:
+            results = list(pool.map(run, todo))
+        for doc, result, error in results:
+            if result is None and error is None:
+                continue                # skipped after a fatal error; nothing was sent
+            if result is not None:
+                words = [w for n, pid in enumerate(doc.page_ids) for w in words_of(pid, n, by_id[pid]["words"])]
+                digital = all(by_id[pid]["source"] == "text_layer" for pid in doc.page_ids)
+                ai_extract.merge(doc, result.data, words, digital)
+            db.add(AiCall(claim_id=claim.id, purpose=f"extract:{doc.doc_type}",
+                          provider=result.provider if result else provider.name,
+                          model=result.model if result else provider.model,
+                          input_tokens=result.input_tokens if result else 0,
+                          output_tokens=result.output_tokens if result else 0,
+                          cost_usd=result.cost_usd if result else 0, duration_ms=result.duration_ms if result else 0,
+                          status="ok" if result else "error", error=error))
+    store.save(db, claim, docs, corrections)
+
+
+STEPS = [("pages", step_pages), ("read", step_read), ("extract", step_extract)]
 
 
 def run_pipeline(db: Session, claim_id: uuid.UUID) -> Claim:

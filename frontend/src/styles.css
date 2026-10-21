@@ -1057,3 +1057,162 @@ a.button {
     grid-column: 1 / -1;
   }
 }
+
+/* ---------- Step 8: claim record ---------- */
+
+.record h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.card-head.pad {
+  padding: 14px 16px 0;
+}
+
+.section-title {
+  font-size: 15px;
+  margin: 22px 0 10px;
+}
+
+.record-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 0 16px;
+}
+
+.plain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+}
+
+.plain-list li {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.plain-list li:last-child {
+  border-bottom: none;
+}
+
+.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.show-link {
+  margin-left: 6px;
+  font-size: 15px;
+  text-decoration: none !important;
+}
+
+.chip-small {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-right: 4px;
+}
+
+.chip-rule {
+  background: var(--bg);
+  color: var(--text-muted);
+}
+
+.chip-ai {
+  background: #efe7ff;
+  color: #6a3fc8;
+}
+
+.chip-reviewer {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.low-conf {
+  color: #9a5b00;
+  font-weight: 600;
+}
+
+.row-review td {
+  background: #fff8e1;
+}
+
+.field-table .field-name {
+  width: 190px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.field-table .field-value {
+  white-space: pre-wrap;
+}
+
+.field-meta {
+  text-align: right;
+  width: 150px;
+}
+
+.edit-inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.edit-inline input {
+  min-width: 260px;
+}
+
+.doc-card {
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.doc-head {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: none;
+  font: inherit;
+  padding: 12px 16px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.doc-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.doc-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.focus-box {
+  position: absolute;
+  border: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.18);
+  border-radius: 3px;
+  animation: pulse-box 1.2s ease-out 2;
+  pointer-events: none;
+}
+
+@keyframes pulse-box {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(245, 158, 11, 0);
+  }
+}

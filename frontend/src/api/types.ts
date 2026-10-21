@@ -323,3 +323,118 @@ export interface UploadResult {
   claim: ClaimDetail;
   warnings: string[];
 }
+
+// ---------- Step 8: claim record ----------
+
+export interface Bbox {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+export interface RecordField {
+  id: string;
+  name: string;
+  value: string | null;
+  normalized: unknown;
+  corrected_value: string | null;
+  method: "rule" | "ai" | "reviewer";
+  confidence: number | null;
+  needs_review: boolean;
+  page_id: string | null;
+  bbox: Bbox | null;
+}
+
+export interface RecordDocument {
+  key: string;
+  doc_type: string;
+  page_ids: string[];
+  quality: string | null;
+  ai_used: boolean;
+  missing: string[];
+  fields: RecordField[];
+  tables: Record<string, Record<string, { text: string; page_id: string | null; bbox: number[] | null; method: string }>[]>;
+}
+
+interface Located {
+  page_id: string | null;
+  bbox: Bbox | null;
+}
+
+export interface RecordBillLine extends Located {
+  line_no: number | null;
+  service_date: string | null;
+  description: string;
+  category: string;
+  category_text: string | null;
+  quantity: string | null;
+  unit_rate: string | null;
+  amount: string;
+  method: string;
+}
+
+export interface RecordMedication extends Located {
+  drug_name: string;
+  quantity: string | null;
+  batch_no: string | null;
+  expiry: string | null;
+  mrp: string | null;
+  unit_rate: string | null;
+  amount: string | null;
+  in_medication_chart: boolean | null;
+}
+
+export interface RecordInvestigation extends Located {
+  test_name: string;
+  kind: string | null;
+  performed_at: string | null;
+  billed: boolean;
+  has_report: boolean;
+  results: { parameter?: string; value?: string; unit?: string; reference?: string }[] | null;
+}
+
+export interface RecordItem extends Located {
+  description: string;
+  source_document: string | null;
+  code: string | null;
+  performed_at: string | null;
+}
+
+export interface ClaimRecord {
+  summary: Record<string, string | number | null>;
+  documents: RecordDocument[];
+  bill_lines: RecordBillLine[];
+  medications: RecordMedication[];
+  investigations: RecordInvestigation[];
+  diagnoses: RecordItem[];
+  procedures: RecordItem[];
+  ai: { calls: number; failed: number; input_tokens: number; output_tokens: number; cost_usd: string; models: string[] };
+  fields_needing_review: number;
+}
+
+export interface Focus {
+  pageId: string;
+  bbox: Bbox | null;
+  stamp: number;
+}
+
+export const FIELD_LABELS: Record<string, string> = {
+  patient_name: "Patient", uhid: "UHID", age: "Age", gender: "Sex", policy_no: "Policy no.", member_id: "Member ID",
+  hospital_name: "Hospital", rohini_id: "Rohini ID", hfr_id: "HFR ID", doctor_name: "Doctor",
+  doctor_qualification: "Qualification", doctor_reg_no: "Doctor reg. no.", admission: "Admitted",
+  discharge: "Discharged", diagnosis: "Diagnosis", icd_code: "ICD-10", procedures: "Procedures",
+  claimed_amount: "Amount claimed", bill_total: "Bill total", bill_no: "Bill no.", bill_date: "Bill date",
+  submitted: "Submitted", claim_type: "Claim type", preauth_no: "Pre-auth no.", preauth_diagnosis: "Pre-auth diagnosis",
+  proposed_treatment: "Proposed treatment", estimate: "Estimate", approved: "Approved", requested_on: "Requested",
+  history: "Past history", complaints: "Complaints", course: "Course in hospital", advice: "Advice",
+  examination: "Examination", investigations_text: "Investigations", signed: "Signed", ward_type: "Ward",
+  room_category: "Room category", pharmacy_total: "Pharmacy total", test: "Test", report_date: "Report date",
+  impression: "Impression", procedure_date: "Operated", surgeon: "Surgeon", anaesthetist: "Anaesthetist",
+  anaesthesia: "Anaesthesia", findings: "Findings", invoice_no: "Invoice no.", model: "Model", brand: "Brand",
+  serial: "Serial / lot", mlc_no: "MLC no.", mlc_date: "MLC date", police_station: "Police station",
+  product: "Product", product_code: "Product code", sum_insured: "Sum insured", policy_start: "Policy start",
+  policy_end: "Policy end", inception: "First inception", room_eligibility: "Room eligibility",
+  sub_limits: "Sub-limits", used_si: "Claims paid this year", balance_si: "Balance sum insured",
+  id_last4: "ID (last 4)", birth_year: "Year of birth", ip_no: "IP no.",
+};

@@ -1,0 +1,52 @@
+clean (20 claims): key fields 100.0% | all fields 100.0% | table rows 100.0%
+   weakest: 
+scanned (9 claims): key fields 87.1% | all fields 87.9% | table rows 98.8%
+   weakest: used_si 0%, approved 50%, hospital_name 58%, rohini_id 62%, bill_no 83%, preauth_no 83%, procedure_date 83%, procedures 88%
+      rohini_id (final_bill): expected '8900080214975' | got '69000802149758217611860'
+      pharmacy_total (pharmacy_bill): expected 624.0 | got 62400.0
+      hospital_name (lab_report): expected 'Ganga Medical Centre' | got None
+      hospital_name (lab_report): expected 'Ganga Medical Centre' | got None
+      hospital_name (lab_report): expected 'Ganga Medical Centre' | got None
+      rohini_id (nursing_chart): expected '8900080214975' | got None
+      admission (nursing_chart): expected '2026-09-21T13:00:00' | got None
+      discharge (nursing_chart): expected '2026-09-23T12:00:00' | got None
+      used_si (policy_copy): expected 32000 | got 83000.0
+      age (preauth_form): expected 32 | got 2
+      preauth_no (preauth_form): expected 'PA58318350' | got 'PAS58318350'
+      approved (preauth_form): expected 52600.0 | got 2600.0
+      rohini_id (discharge_summary): expected '8900080946721' | got '8900060946721'
+      uhid (discharge_summary): expected 'UH5250244' | got 'UHS250244'
+      diagnosis (discharge_summary): expected 'Symptomatic cholelithiasis' | got 'Symptomatic choletithiasis'
+      procedures (discharge_summary): expected ['Laparoscopic cholecystectomy', 'Open inguinal hernia repair with mesh, right'] | got ['Laparoscopic cholecystectomy', 'Open inguinal hernia repair with mesh']
+      age (final_bill): expected 32 | got None
+      gender (final_bill): expected 'F' | got None
+      used_si (policy_copy): expected 32000 | got 88900.0
+      approved (preauth_form): expected 12900.0 | got 2900.0
+      bill_no (final_bill): expected 'IPB/2026/78720' | got '(PB/2026/78720'
+      bill_total (final_bill): expected 11889.0 | got 1.0
+      used_si (policy_copy): expected 15000 | got None
+      age (final_bill): expected 32 | got 324
+      gender (final_bill): expected 'F' | got None
+      admission (final_bill): expected '2026-02-12T18:30:00' | got '2026-02-12T00:00:00'
+      pharmacy_line: expected {'drug': 'Inj Oxytocin 10 IU', 'batch': 'B5213C', 'qty': 3, 'mrp': 25.0, 'rate': 25.0, 'amount': 75.0}
+         got {'no': '1', 'mrp': '25.00', 'qty': '3', 'drug': 'Inj Oxytocin 10 IU', 'rate': '25,00', 'batch': 'B5213C', 'amount': '75.00', 'expiry': '03/2028'}
+      report_date (imaging_report): expected '2026-03-19T11:30:00' | got None
+      uhid (implant_sticker): expected 'UH9443364' | got 'UHO443364'
+      gender (implant_sticker): expected 'M' | got None
+      admission (implant_sticker): expected '2026-03-19T08:30:00' | got '2026-03-19T06:30:00'
+      procedures (discharge_summary): expected ['Coronary angiography and PTCA with one drug-eluting stent to LAD'] | got ['Coronary angiography and PTCA with one drug-eluting stent to LAD on 16/05/2026']
+      report_date (lab_report): expected '2026-05-15T21:20:00' | got '2026-05-16T21:20:00'
+      procedure_date (ot_notes): expected '2026-05-16T10:00:00' | got '2026-05-16T00:00:00'
+      lab_result: expected {'parameter': 'Blood Urea', 'value': '32', 'unit': 'mg/dL', 'reference': '15 - 45'}
+         got {'unit': 'mg/dl i', 'value': '32', 'parameter': 'Blood Urea — ‘ है... 2', 'reference': '15-45'}
+      lab_result: expected {'parameter': 'Serum Creatinine', 'value': '0.89', 'unit': 'mg/dL', 'reference': '0.6 - 1.3'}
+         got {'unit': 'mg/dL', 'value': '0.89', 'parameter': 'Serum Creatinine Vi ros abit | 0.89 ; हि', 'reference': '0.6 - 1.3'}
+      policy_start (policy_copy): expected '2025-09-11' | got '2025-08-11'
+      procedures (claim_form): expected [] | got ['Medical management']
+      approved (preauth_form): expected 10200.0 | got 200.0
+      bill_no (final_bill): expected 'IPB/2026/37493' | got '1PB/2026/37493'
+      doctor_reg_no (discharge_summary): expected 'MPMC/2003/90642' | got 'Reg. No. MPMC/2003/90642'
+      bill_no (final_bill): expected 'IPB/2025/42276' | got '1PB/2025/42276'
+AI calls so far: 425 (120 failed), estimated cost USD 0.0000
+   120x error: BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, }
+   ollama: 305 successful calls, average 44.9s each

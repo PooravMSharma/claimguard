@@ -5,6 +5,7 @@ import {
   DOC_TYPE_LABELS,
   QUALITY_LABELS,
   type ClaimDetail,
+  type Focus,
   type PageText,
   type QualityFlag,
 } from "../../api/types";
@@ -24,6 +25,7 @@ interface Props {
   claim: ClaimDetail;
   canEditType: boolean;
   onChanged: (claim: ClaimDetail) => void;
+  focus?: Focus | null;
 }
 
 const TYPES = Object.keys(DOC_TYPE_LABELS);
@@ -33,7 +35,7 @@ function QualityDot({ flag }: { flag: QualityFlag | null }) {
   return <span className={`qdot q-${flag}`} title={QUALITY_LABELS[flag]} />;
 }
 
-export default function PageViewer({ claim, canEditType, onChanged }: Props) {
+export default function PageViewer({ claim, canEditType, onChanged, focus }: Props) {
   const pages: FlatPage[] = useMemo(
     () =>
       claim.files.flatMap((f) =>
@@ -56,6 +58,14 @@ export default function PageViewer({ claim, canEditType, onChanged }: Props) {
   const [text, setText] = useState<PageText | null>(null);
   const [error, setError] = useState<string | null>(null);
   const current = pages[Math.min(selected, Math.max(pages.length - 1, 0))];
+
+  // "Show on page" from the claim record: jump to the page and highlight the value
+  useEffect(() => {
+    if (!focus) return;
+    const index = pages.findIndex((p) => p.id === focus.pageId);
+    if (index >= 0) setSelected(index);
+  }, [focus, pages]);
+  const highlight = focus && current && focus.pageId === current.id ? focus.bbox : null;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -181,6 +191,18 @@ export default function PageViewer({ claim, canEditType, onChanged }: Props) {
         {error && <p className="error-text small">{error}</p>}
         <div className="page-canvas">
           <img className="page-img" src={`/api/claims/${claim.id}/pages/${current.id}/image`} alt={`Page ${selected + 1}`} />
+          {highlight && (
+            <span
+              key={focus?.stamp}
+              className="focus-box"
+              style={{
+                left: `${(highlight.x0 - 0.006) * 100}%`,
+                top: `${(highlight.y0 - 0.004) * 100}%`,
+                width: `${(highlight.x1 - highlight.x0 + 0.012) * 100}%`,
+                height: `${(highlight.y1 - highlight.y0 + 0.008) * 100}%`,
+              }}
+            />
+          )}
           {showWords &&
             text?.id === current.id &&
             text.words.map(([word, conf, x0, y0, x1, y1], i) => (

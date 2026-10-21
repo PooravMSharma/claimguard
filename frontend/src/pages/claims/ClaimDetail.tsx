@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
 import { api } from "../../api/client";
-import { DOC_TYPE_LABELS, STAGE_LABELS, type ClaimDetail as Detail } from "../../api/types";
+import { DOC_TYPE_LABELS, STAGE_LABELS, type Bbox, type ClaimDetail as Detail, type Focus } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import { ACTIVE, StatusTag, fileSize, seconds, when } from "./common";
+import ClaimRecordView from "./ClaimRecordView";
 import PageViewer from "./PageViewer";
 
 export default function ClaimDetail() {
@@ -14,6 +15,13 @@ export default function ClaimDetail() {
   const [claim, setClaim] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<"record" | "pages">("record");
+  const [focus, setFocus] = useState<Focus | null>(null);
+  const showOnPage = (pageId: string, bbox: Bbox | null) => {
+    setFocus({ pageId, bbox, stamp: Date.now() });
+    setTab("pages");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   const warnings = (location.state as { warnings?: string[] } | null)?.warnings ?? [];
 
   const load = useCallback(async () => {
@@ -180,7 +188,24 @@ export default function ClaimDetail() {
         </table>
       </div>
 
-      <PageViewer claim={claim} canEditType={can("claims.review")} onChanged={setClaim} />
+      <div className="tabs" role="tablist">
+        <button role="tab" aria-selected={tab === "record"} className={tab === "record" ? "tab active" : "tab"} onClick={() => setTab("record")}>
+          Claim record
+        </button>
+        <button role="tab" aria-selected={tab === "pages"} className={tab === "pages" ? "tab active" : "tab"} onClick={() => setTab("pages")}>
+          Documents ({claim.pages} pages)
+        </button>
+      </div>
+      {tab === "record" ? (
+        <ClaimRecordView
+          claimId={claim.id}
+          canCorrect={can("claims.review")}
+          onShow={showOnPage}
+          refreshKey={`${claim.status}-${claim.processing_finished_at ?? ""}`}
+        />
+      ) : (
+        <PageViewer claim={claim} canEditType={can("claims.review")} onChanged={setClaim} focus={focus} />
+      )}
     </section>
   );
 }

@@ -190,7 +190,7 @@ def test_pipeline_reads_classifies_and_serves_text(client, db, store):
     assert detail["pages_needing_review"] == 0
 
     text = client.get(f"/api/claims/{claim_id}/pages/{pages[2]['id']}/text", headers=hdrs).json()
-    assert "FINAL BILL" in text["text"] and "7,800.00" in text["text"] and len(text["words"][0]) == 6
+    assert "FINAL BILL" in text["text"] and "7,800.00" in text["text"] and len(text["words"][0]) == 7
 
     # the stored image was turned upright to match the words
     stored = db.get(DocumentPage, uuid.UUID(pages[2]["id"]))

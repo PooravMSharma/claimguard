@@ -208,5 +208,5 @@ def create_claim(
 def enqueue_processing(claim_id: uuid.UUID) -> str:
     """Queue the processing pipeline for a claim. Call only after the claim is committed."""
     job = job_queue.enqueue("app.worker.jobs.process_claim", str(claim_id),
-                            job_timeout=1800, result_ttl=3600, failure_ttl=7 * 86400)
+                            job_timeout=get_settings().job_timeout_seconds, result_ttl=3600, failure_ttl=7 * 86400)
     return job.id

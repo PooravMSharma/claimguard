@@ -36,8 +36,9 @@ class Word:
     line: int                # line number on the page, for rebuilding text
 
     def as_list(self) -> list:
+        """[text, confidence, x0, y0, x1, y1, line]: boxes as page fractions; line = reading line on the page."""
         return [self.text, round(self.conf, 3), round(self.x0, 4), round(self.y0, 4), round(self.x1, 4),
-                round(self.y1, 4)]
+                round(self.y1, 4), self.line]
 
 
 @dataclass

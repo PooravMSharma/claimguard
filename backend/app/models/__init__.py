@@ -3,8 +3,10 @@
 from app.models.claim import Claim, ClaimDocument, DocumentPage
 from app.models.decision import Decision
 from app.models.extraction import (
+    AiCall,
     BillLineItem,
     Diagnosis,
+    ExtractedDocument,
     ExtractedField,
     Investigation,
     Medication,
@@ -23,7 +25,9 @@ from app.models.user import AuditLog, Role, User
 
 __all__ = [
     "AuditLog",
+    "AiCall",
     "BillLineItem",
+    "ExtractedDocument",
     "Claim",
     "ClaimDocument",
     "Decision",

@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,6 +27,22 @@ class SourceMixin:
     confidence: Mapped[float | None] = mapped_column(Float)
 
 
+class ExtractedDocument(Base):
+    """One document found in the claim (a bill, a lab report...) and everything read from it."""
+
+    __tablename__ = "extracted_documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    claim_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("claims.id", ondelete="CASCADE"), index=True)
+    key: Mapped[str] = mapped_column(String(60))            # "final_bill", "lab_report:2"
+    doc_type: Mapped[str] = mapped_column(String(40))
+    page_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    quality: Mapped[str | None] = mapped_column(String(20))
+    ai_used: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    missing: Mapped[list] = mapped_column(JSONB, default=list)   # required items still not found
+    data: Mapped[dict] = mapped_column(JSONB, default=dict)      # {"fields": {...}, "tables": {...}}
+
+
 class ExtractedField(SourceMixin, Base):
     """A single key value, e.g. admission_date or doctor_registration_no."""
 
@@ -34,8 +50,11 @@ class ExtractedField(SourceMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     claim_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("claims.id", ondelete="CASCADE"), index=True)
-    section: Mapped[str] = mapped_column(String(50))  # patient, policy, hospital, encounter, ...
+    section: Mapped[str] = mapped_column(String(50))  # document type: claim_form, final_bill, ...
+    document_key: Mapped[str | None] = mapped_column(String(60), index=True)
     field_name: Mapped[str] = mapped_column(String(80))
+    method: Mapped[str] = mapped_column(String(10), default="rule", server_default="rule")  # rule | ai | reviewer
+    needs_review: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     value_text: Mapped[str | None] = mapped_column(Text)
     value_normalized: Mapped[dict | None] = mapped_column(JSONB)
     corrected_value: Mapped[str | None] = mapped_column(Text)
@@ -60,6 +79,8 @@ class BillLineItem(SourceMixin, Base):
     unit_rate: Mapped[Decimal | None] = mapped_column(Money)
     amount: Mapped[Decimal] = mapped_column(Money)
     package_code: Mapped[str | None] = mapped_column(String(32))
+    category_text: Mapped[str | None] = mapped_column(String(80))   # the category as printed on the bill
+    method: Mapped[str] = mapped_column(String(10), default="rule", server_default="rule")
 
     claim: Mapped[Claim] = relationship(back_populates="bill_line_items")
 
@@ -86,6 +107,7 @@ class Procedure(SourceMixin, Base):
     package_code: Mapped[str | None] = mapped_column(String(32), index=True)
     performed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     surgeon: Mapped[str | None] = mapped_column(String(200))
+    source_document: Mapped[str | None] = mapped_column(String(40))  # claim_form, discharge_summary, ot_notes, ...
 
     claim: Mapped[Claim] = relationship(back_populates="procedures")
 
@@ -98,6 +120,7 @@ class Investigation(SourceMixin, Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     claim_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("claims.id", ondelete="CASCADE"), index=True)
     test_name: Mapped[str] = mapped_column(String(255))
+    kind: Mapped[str | None] = mapped_column(String(10))   # lab | imaging
     performed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     results: Mapped[dict | None] = mapped_column(JSONB)  # [{"name","value","unit","range"}]
     lab_name: Mapped[str | None] = mapped_column(String(255))
@@ -116,8 +139,29 @@ class Medication(SourceMixin, Base):
     strength: Mapped[str | None] = mapped_column(String(80))
     quantity: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     batch_no: Mapped[str | None] = mapped_column(String(64))
+    expiry: Mapped[str | None] = mapped_column(String(20))
     mrp: Mapped[Decimal | None] = mapped_column(Money)
+    unit_rate: Mapped[Decimal | None] = mapped_column(Money)
     amount: Mapped[Decimal | None] = mapped_column(Money)
     in_medication_chart: Mapped[bool | None] = mapped_column(Boolean)
 
     claim: Mapped[Claim] = relationship(back_populates="medications")
+
+
+class AiCall(Base):
+    """Every call to the AI provider: what for, which model, tokens and estimated cost."""
+
+    __tablename__ = "ai_calls"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    claim_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("claims.id", ondelete="CASCADE"), index=True)
+    purpose: Mapped[str] = mapped_column(String(80))         # e.g. "extract:final_bill"
+    provider: Mapped[str] = mapped_column(String(30))
+    model: Mapped[str] = mapped_column(String(80))
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[Decimal] = mapped_column(Numeric(10, 5), default=0)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(10))          # ok | error
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
