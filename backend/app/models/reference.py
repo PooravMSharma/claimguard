@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -71,6 +72,9 @@ class Package(TimestampMixin, Base):
     expected_los_days: Mapped[int | None] = mapped_column(Integer)
     inclusions: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
     mandatory_documents: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    # Diagnosis codes / words that map a claim to this package when the package code is not printed,
+    # e.g. ["K80", "cholelithiasis"]. ICD codes match on their 3-character category.
+    keywords: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
     is_day_care: Mapped[bool | None] = mapped_column()
     effective_from: Mapped[date | None] = mapped_column(Date)
     import_id: Mapped[int | None] = _import_fk()
@@ -144,3 +148,66 @@ class PolicyTerm(TimestampMixin, Base):
     import_id: Mapped[int | None] = _import_fk()
 
     __table_args__ = (UniqueConstraint("product_code", "key", name="uq_policy_terms_product_key"),)
+
+
+# ---------------------------------------------------------------- registries (R-layer and policy checks)
+# Stand-ins for the national registers and the insurer's policy system: NMC/state medical council
+# registers, HFR/Rohini, the insurer's watchlist and its policy administration data. Loaded from CSV
+# (import-registries) until live feeds are connected.
+
+
+class RegistryDoctor(Base):
+    __tablename__ = "registry_doctors"
+
+    registration_no: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    qualification: Mapped[str | None] = mapped_column(String(200))
+    council: Mapped[str | None] = mapped_column(String(200))
+    import_id: Mapped[int | None] = _import_fk()
+
+
+class RegistryHospital(Base):
+    __tablename__ = "registry_hospitals"
+
+    rohini_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    hfr_id: Mapped[str | None] = mapped_column(String(32), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    address: Mapped[str | None] = mapped_column(String(500))
+    city: Mapped[str | None] = mapped_column(String(100))
+    state: Mapped[str | None] = mapped_column(String(100))
+    city_tier: Mapped[CityTier] = mapped_column(db_enum(CityTier, "city_tier"), default=CityTier.ANY)
+    nabh: Mapped[bool | None] = mapped_column()
+    import_id: Mapped[int | None] = _import_fk()
+
+
+class RegistryWatchlist(Base):
+    __tablename__ = "registry_watchlist"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    rohini_id: Mapped[str] = mapped_column(String(32), index=True)
+    name: Mapped[str | None] = mapped_column(String(255))
+    reason: Mapped[str] = mapped_column(Text)
+    import_id: Mapped[int | None] = _import_fk()
+
+
+class PolicyRecord(Base):
+    """The insurer's own record of a policy member: what the claim's policy copy should agree with."""
+
+    __tablename__ = "policy_records"
+    __table_args__ = (UniqueConstraint("policy_no", "member_id", name="uq_policy_records_policy_member"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    policy_no: Mapped[str] = mapped_column(String(64), index=True)
+    member_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    member_name: Mapped[str | None] = mapped_column(String(200))
+    product_code: Mapped[str | None] = mapped_column(String(64))
+    sum_insured: Mapped[Decimal | None] = mapped_column(Money)
+    used_si: Mapped[Decimal | None] = mapped_column(Money)
+    policy_start: Mapped[date | None] = mapped_column(Date)
+    policy_end: Mapped[date | None] = mapped_column(Date)
+    first_inception: Mapped[date | None] = mapped_column(Date)
+    room_eligibility: Mapped[str | None] = mapped_column(String(40))
+    room_rent_cap_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    sub_limits: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    declared_peds: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    import_id: Mapped[int | None] = _import_fk()

@@ -6,65 +6,285 @@
   "effective_from": "2024-05-29",
   "notes": "Regulatory defaults used until a client supplies its own policy wording. Values marked 'typical' are common market terms, not regulatory limits: replace them with the client's product terms.",
   "terms": [
-    {"key": "initial_waiting_days", "value": {"days": 30, "except": ["accident"]},
-     "description": "No claims in the first 30 days of the first policy, except accidents (standard exclusion Excl03).",
-     "source": "IRDAI standard exclusions, Excl03"},
-    {"key": "ped_waiting_months", "value": {"months": 36, "is_regulatory_max": true},
-     "description": "Pre-existing diseases are covered after continuous cover of at most 36 months.",
-     "source": "IRDAI (Insurance Products) Regulations 2024; Master Circular 2024"},
-    {"key": "specific_disease_waiting_months", "value": {"months": 24, "regulatory_max_months": 36, "typical": true},
-     "description": "Named diseases/procedures (e.g. cataract, hernia, joint replacement) have a waiting period. 24 months is typical; the regulatory maximum is 36.",
-     "source": "IRDAI standard exclusions, Excl02; Master Circular 2024"},
-    {"key": "moratorium_months", "value": {"months": 60},
-     "description": "After 60 continuous months of cover, a claim cannot be contested for non-disclosure or misrepresentation, except proven fraud.",
-     "source": "Master Circular 2024"},
-    {"key": "min_hospitalisation_hours", "value": {"hours": 24, "except": ["day_care"]},
-     "description": "Hospitalisation means admission for at least 24 consecutive in-patient care hours, except listed day care procedures.",
-     "source": "IRDAI standard definitions (Hospitalisation)"},
-    {"key": "pre_hospitalisation_days", "value": {"days": 30, "typical": true},
-     "description": "Medical expenses incurred up to 30 days before admission (typical product term).",
-     "source": "Typical market product term"},
-    {"key": "post_hospitalisation_days", "value": {"days": 60, "typical": true},
-     "description": "Medical expenses incurred up to 60 days after discharge (typical product term).",
-     "source": "Typical market product term"},
-    {"key": "room_rent_limit", "value": {"normal_pct_of_si_per_day": 1, "icu_pct_of_si_per_day": 2, "typical": true},
-     "description": "Room rent capped at 1% of sum insured per day (ICU 2%). Typical capped-product term; many products have no cap.",
-     "source": "Typical market product term"},
-    {"key": "proportionate_deduction", "value": {"applies": true, "exempt_categories": ["pharmacy", "consumables", "implants", "medical_devices", "diagnostics"], "icu_exempt": true},
-     "description": "If a costlier room than eligible is taken, associated expenses are reduced in proportion, but never pharmacy, consumables, implants, medical devices or diagnostics, and not for ICU charges.",
-     "source": "Master Circular 2024 (proportionate deduction)"},
-    {"key": "cashless_authorisation_hours", "value": {"hours": 1},
-     "description": "Decision on a cashless authorisation request within 1 hour.",
-     "source": "Master Circular 2024"},
-    {"key": "final_discharge_authorisation_hours", "value": {"hours": 3},
-     "description": "Final cashless authorisation within 3 hours of the discharge request.",
-     "source": "Master Circular 2024"},
-    {"key": "claim_settlement_days", "value": {"days": 30},
-     "description": "Reimbursement claims settled or rejected within 30 days of the last necessary document.",
-     "source": "Master Circular 2024"},
-    {"key": "ayush_cover", "value": {"covered": true, "limit": "sum_insured"},
-     "description": "In-patient AYUSH treatment is covered up to the sum insured.",
-     "source": "Master Circular 2024"},
-    {"key": "standard_exclusions", "value": {"codes": {
-       "Excl01": "Pre-existing diseases (within waiting period)",
-       "Excl02": "Specified disease/procedure waiting period",
-       "Excl03": "30-day initial waiting period",
-       "Excl04": "Investigation and evaluation only",
-       "Excl05": "Rest cure, rehabilitation and respite care",
-       "Excl06": "Obesity/weight control",
-       "Excl07": "Change-of-gender treatments",
-       "Excl08": "Cosmetic or plastic surgery",
-       "Excl09": "Hazardous or adventure sports",
-       "Excl10": "Breach of law",
-       "Excl11": "Excluded providers",
-       "Excl12": "Alcoholism, drug or substance abuse",
-       "Excl13": "Treatments at health hydros, nature cure clinics, spas",
-       "Excl14": "Dietary supplements and substances bought without prescription",
-       "Excl15": "Refractive error (less than 7.5 dioptres)",
-       "Excl16": "Unproven treatments",
-       "Excl17": "Sterility and infertility",
-       "Excl18": "Maternity"}},
-     "description": "IRDAI standardised exclusion codes. Products may cover some (e.g. maternity) by explicit benefit.",
-     "source": "IRDAI Guidelines on Standardization of Exclusions in Health Insurance Contracts"}
+    {
+      "key": "initial_waiting_days",
+      "value": {
+        "days": 30,
+        "except": [
+          "accident"
+        ]
+      },
+      "description": "No claims in the first 30 days of the first policy, except accidents (standard exclusion Excl03).",
+      "source": "IRDAI standard exclusions, Excl03"
+    },
+    {
+      "key": "ped_waiting_months",
+      "value": {
+        "months": 36,
+        "is_regulatory_max": true
+      },
+      "description": "Pre-existing diseases are covered after continuous cover of at most 36 months.",
+      "source": "IRDAI (Insurance Products) Regulations 2024; Master Circular 2024"
+    },
+    {
+      "key": "specific_disease_waiting_months",
+      "value": {
+        "months": 24,
+        "regulatory_max_months": 36,
+        "typical": true
+      },
+      "description": "Named diseases/procedures (e.g. cataract, hernia, joint replacement) have a waiting period. 24 months is typical; the regulatory maximum is 36.",
+      "source": "IRDAI standard exclusions, Excl02; Master Circular 2024"
+    },
+    {
+      "key": "moratorium_months",
+      "value": {
+        "months": 60
+      },
+      "description": "After 60 continuous months of cover, a claim cannot be contested for non-disclosure or misrepresentation, except proven fraud.",
+      "source": "Master Circular 2024"
+    },
+    {
+      "key": "min_hospitalisation_hours",
+      "value": {
+        "hours": 24,
+        "except": [
+          "day_care"
+        ]
+      },
+      "description": "Hospitalisation means admission for at least 24 consecutive in-patient care hours, except listed day care procedures.",
+      "source": "IRDAI standard definitions (Hospitalisation)"
+    },
+    {
+      "key": "pre_hospitalisation_days",
+      "value": {
+        "days": 30,
+        "typical": true
+      },
+      "description": "Medical expenses incurred up to 30 days before admission (typical product term).",
+      "source": "Typical market product term"
+    },
+    {
+      "key": "post_hospitalisation_days",
+      "value": {
+        "days": 60,
+        "typical": true
+      },
+      "description": "Medical expenses incurred up to 60 days after discharge (typical product term).",
+      "source": "Typical market product term"
+    },
+    {
+      "key": "room_rent_limit",
+      "value": {
+        "normal_pct_of_si_per_day": 1,
+        "icu_pct_of_si_per_day": 2,
+        "typical": true
+      },
+      "description": "Room rent capped at 1% of sum insured per day (ICU 2%). Typical capped-product term; many products have no cap.",
+      "source": "Typical market product term"
+    },
+    {
+      "key": "proportionate_deduction",
+      "value": {
+        "applies": true,
+        "exempt_categories": [
+          "pharmacy",
+          "consumables",
+          "implants",
+          "medical_devices",
+          "diagnostics"
+        ],
+        "icu_exempt": true
+      },
+      "description": "If a costlier room than eligible is taken, associated expenses are reduced in proportion, but never pharmacy, consumables, implants, medical devices or diagnostics, and not for ICU charges.",
+      "source": "Master Circular 2024 (proportionate deduction)"
+    },
+    {
+      "key": "cashless_authorisation_hours",
+      "value": {
+        "hours": 1
+      },
+      "description": "Decision on a cashless authorisation request within 1 hour.",
+      "source": "Master Circular 2024"
+    },
+    {
+      "key": "final_discharge_authorisation_hours",
+      "value": {
+        "hours": 3
+      },
+      "description": "Final cashless authorisation within 3 hours of the discharge request.",
+      "source": "Master Circular 2024"
+    },
+    {
+      "key": "claim_settlement_days",
+      "value": {
+        "days": 30
+      },
+      "description": "Reimbursement claims settled or rejected within 30 days of the last necessary document.",
+      "source": "Master Circular 2024"
+    },
+    {
+      "key": "ayush_cover",
+      "value": {
+        "covered": true,
+        "limit": "sum_insured"
+      },
+      "description": "In-patient AYUSH treatment is covered up to the sum insured.",
+      "source": "Master Circular 2024"
+    },
+    {
+      "key": "standard_exclusions",
+      "value": {
+        "codes": {
+          "Excl01": "Pre-existing diseases (within waiting period)",
+          "Excl02": "Specified disease/procedure waiting period",
+          "Excl03": "30-day initial waiting period",
+          "Excl04": "Investigation and evaluation only",
+          "Excl05": "Rest cure, rehabilitation and respite care",
+          "Excl06": "Obesity/weight control",
+          "Excl07": "Change-of-gender treatments",
+          "Excl08": "Cosmetic or plastic surgery",
+          "Excl09": "Hazardous or adventure sports",
+          "Excl10": "Breach of law",
+          "Excl11": "Excluded providers",
+          "Excl12": "Alcoholism, drug or substance abuse",
+          "Excl13": "Treatments at health hydros, nature cure clinics, spas",
+          "Excl14": "Dietary supplements and substances bought without prescription",
+          "Excl15": "Refractive error (less than 7.5 dioptres)",
+          "Excl16": "Unproven treatments",
+          "Excl17": "Sterility and infertility",
+          "Excl18": "Maternity"
+        }
+      },
+      "description": "IRDAI standardised exclusion codes. Products may cover some (e.g. maternity) by explicit benefit.",
+      "source": "IRDAI Guidelines on Standardization of Exclusions in Health Insurance Contracts"
+    },
+    {
+      "key": "specific_diseases",
+      "value": {
+        "typical": true,
+        "conditions": [
+          {
+            "name": "Cataract",
+            "icd": [
+              "H25",
+              "H26"
+            ],
+            "words": [
+              "cataract"
+            ]
+          },
+          {
+            "name": "Calculus diseases of gall bladder and urinary system",
+            "icd": [
+              "K80",
+              "K81",
+              "N20",
+              "N21"
+            ],
+            "words": [
+              "cholelithiasis",
+              "gall bladder calculi",
+              "cholecystectomy",
+              "renal calculus",
+              "ureteric calculus"
+            ]
+          },
+          {
+            "name": "Hernia",
+            "icd": [
+              "K40",
+              "K41",
+              "K42",
+              "K43"
+            ],
+            "words": [
+              "hernia"
+            ]
+          },
+          {
+            "name": "Benign prostatic hypertrophy",
+            "icd": [
+              "N40"
+            ],
+            "words": [
+              "prostatic hypertrophy",
+              "bph"
+            ]
+          },
+          {
+            "name": "Hydrocele",
+            "icd": [
+              "N43"
+            ],
+            "words": [
+              "hydrocele"
+            ]
+          },
+          {
+            "name": "Haemorrhoids, fissure, fistula",
+            "icd": [
+              "K60",
+              "K61",
+              "K64"
+            ],
+            "words": [
+              "haemorrhoid",
+              "hemorrhoid",
+              "fistula in ano",
+              "fissure in ano",
+              "piles"
+            ]
+          },
+          {
+            "name": "Tonsils, adenoids, sinuses",
+            "icd": [
+              "J32",
+              "J35"
+            ],
+            "words": [
+              "tonsillectomy",
+              "adenoidectomy",
+              "sinusitis"
+            ]
+          },
+          {
+            "name": "Joint replacement (non-accidental)",
+            "icd": [
+              "M16",
+              "M17"
+            ],
+            "words": [
+              "joint replacement",
+              "knee replacement",
+              "hip replacement",
+              "arthroplasty"
+            ]
+          },
+          {
+            "name": "Hysterectomy for benign conditions",
+            "icd": [
+              "D25",
+              "N80"
+            ],
+            "words": [
+              "hysterectomy",
+              "fibroid"
+            ]
+          },
+          {
+            "name": "Varicose veins",
+            "icd": [
+              "I83"
+            ],
+            "words": [
+              "varicose"
+            ]
+          }
+        ]
+      },
+      "description": "Conditions usually listed under the specific-disease waiting period (typical filed products; replace with the client's own list).",
+      "source": "Typical list from IRDAI-filed retail health products; not a regulatory list"
+    }
   ]
 }

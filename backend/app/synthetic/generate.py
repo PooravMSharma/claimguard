@@ -20,10 +20,21 @@ from pathlib import Path
 from random import Random
 
 from app.rules.catalogue import CHECKS, expected_band
-from app.synthetic.case import QUALIFICATION, Case, Doctor, Hospital, build_genuine, make_doctor, make_hospital
+from app.synthetic.case import (
+    ICU_RATE,
+    QUALIFICATION,
+    ROOM_RATE,
+    TIER_FACTOR,
+    Case,
+    Doctor,
+    Hospital,
+    build_genuine,
+    make_doctor,
+    make_hospital,
+)
 from app.synthetic.render import render_case
 from app.synthetic.scan import scan_pdf
-from app.synthetic.scenarios import SCENARIOS
+from app.synthetic.scenarios import NORMAL_CONSUMABLES, SCENARIOS
 from app.synthetic.seeders import SEEDERS, Context, Seeder
 
 GENERATOR_VERSION = "1.0"
@@ -149,6 +160,7 @@ class Generator:
 
         self.write_manifest(manifest)
         self.write_registries()
+        write_reference(self.opts.out_dir / "reference")
         missing = [c for c in CHECKS if coverage[c] == 0]
         summary = {
             "generator_version": GENERATOR_VERSION, "seed": self.opts.seed, "claims": len(manifest),
@@ -225,6 +237,59 @@ class Generator:
                 w.writerow([p.policy_no, p.member_id, c.patient.name, p.product_code, p.sum_insured, p.used_si,
                             p.start, p.end, p.inception, p.room_eligibility, p.room_rent_cap_pct or "",
                             json.dumps(p.sub_limits), json.dumps(p.declared_peds)])
+
+
+# What a package includes, as bill categories (app.models.enums.BillCategory). Investigations, medicines and
+# implants are billed on top of the package rate.
+SURGICAL_INCLUSIONS = ["room", "nursing", "consultation", "surgeon_fee", "anaesthesia", "ot_charges", "consumables"]
+MEDICAL_INCLUSIONS = ["room", "nursing", "consultation", "consumables"]
+
+
+def write_reference(folder: Path) -> None:
+    """Synthetic benchmarks in the same CSV format as the official files (load with import-packages and
+    import-tariffs). They let the benchmark checks run end-to-end on synthetic claims; the official PM-JAY and
+    CGHS files replace them for real claims. Every code starts with SYN- so they can never be mistaken for real.
+    """
+    folder.mkdir(parents=True, exist_ok=True)
+    with open(folder / "packages.csv", "w", newline="") as handle:
+        w = csv.writer(handle)
+        w.writerow(["code", "name", "specialty", "rate", "expected_los_days", "is_day_care", "mandatory_documents",
+                    "inclusions", "keywords"])
+        for s in SCENARIOS.values():
+            words = [s.icd_code.split(".")[0][:3], s.diagnosis.lower()] + ([s.procedure.lower()] if s.procedure else [])
+            w.writerow([s.package_code, s.procedure or s.name, s.specialty, s.package_rate, s.los_norm, s.day_care,
+                        "", "|".join(SURGICAL_INCLUSIONS if s.surgical else MEDICAL_INCLUSIONS), "|".join(words)])
+    with open(folder / "tariffs.csv", "w", newline="") as handle:
+        w = csv.writer(handle)
+        w.writerow(["code", "name", "category", "specialty", "rate", "city_tier", "ward_type"])
+        tests: dict[str, float] = {}
+        for s in SCENARIOS.values():
+            for t in s.tests:
+                tests[t.name] = t.rate
+        for tier, factor in TIER_FACTOR.items():
+            def row(code: str, name: str, category: str, rate: float, ward: str = "any", specialty: str = "") -> None:
+                w.writerow([code, name, category, specialty, round(rate * factor), tier, ward])
+
+            for name, rate in sorted(tests.items()):
+                slug = "".join(ch for ch in name.upper() if ch.isalnum())[:20]
+                row(f"SYN-T-{slug}", name, "Investigation", rate)
+            for s in SCENARIOS.values():
+                if s.surgical and s.procedure:
+                    code = s.package_code.removeprefix("SYN-")
+                    row(f"SYN-SF-{code}", f"Surgeon fee - {s.procedure}", "Professional fee", s.package_rate * 0.35,
+                        specialty=s.specialty)
+                    row(f"SYN-AF-{code}", f"Anaesthetist fee - {s.procedure}", "Professional fee",
+                        s.package_rate * 0.12, specialty=s.specialty)
+                    row(f"SYN-OT-{code}", f"Operation theatre charges - {s.procedure}", "OT charges",
+                        s.package_rate * 0.15, specialty=s.specialty)
+            for ward, rate in ROOM_RATE.items():
+                row(f"SYN-RM-{ward.upper()}", f"Room rent - {ward.replace('_', '-')} ward", "Room", rate, ward)
+            row("SYN-ICU", "ICU charges", "Room", ICU_RATE)
+            row("SYN-NURSING", "Nursing charges", "Nursing", 400)
+            row("SYN-VISIT", "Consultant visit charges", "Consultation", 700)
+            for name, _per_day, rate in NORMAL_CONSUMABLES:
+                slug = "".join(ch for ch in name.upper() if ch.isalnum())[:20]
+                row(f"SYN-C-{slug}", name, "Consumables", rate)
 
 
 def generate(opts: Options, progress=None) -> dict:

@@ -16,17 +16,22 @@ from app.models.reference import (
     Icd10Code,
     NonPayableItem,
     Package,
+    PolicyRecord,
     PolicyTerm,
     ReferenceImport,
+    RegistryDoctor,
+    RegistryHospital,
+    RegistryWatchlist,
     TariffRate,
 )
-from app.models.rules import Finding, FindingReview, Rule
+from app.models.rules import CheckRun, Finding, FindingReview, Rule
 from app.models.user import AuditLog, Role, User
 
 __all__ = [
     "AuditLog",
     "AiCall",
     "BillLineItem",
+    "CheckRun",
     "ExtractedDocument",
     "Claim",
     "ClaimDocument",
@@ -41,11 +46,15 @@ __all__ = [
     "Medication",
     "NonPayableItem",
     "Package",
+    "PolicyRecord",
     "PolicyTerm",
     "Procedure",
     "Role",
     "Rule",
     "ReferenceImport",
+    "RegistryDoctor",
+    "RegistryHospital",
+    "RegistryWatchlist",
     "TariffRate",
     "User",
 ]

@@ -6,6 +6,7 @@ import { DOC_TYPE_LABELS, STAGE_LABELS, type Bbox, type ClaimDetail as Detail, t
 import { useAuth } from "../../auth/AuthContext";
 import { ACTIVE, StatusTag, fileSize, seconds, when } from "./common";
 import ClaimRecordView from "./ClaimRecordView";
+import FindingsView from "./FindingsView";
 import PageViewer from "./PageViewer";
 
 export default function ClaimDetail() {
@@ -15,7 +16,7 @@ export default function ClaimDetail() {
   const [claim, setClaim] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"record" | "pages">("record");
+  const [tab, setTab] = useState<"findings" | "record" | "pages">("findings");
   const [focus, setFocus] = useState<Focus | null>(null);
   const showOnPage = (pageId: string, bbox: Bbox | null) => {
     setFocus({ pageId, bbox, stamp: Date.now() });
@@ -189,6 +190,9 @@ export default function ClaimDetail() {
       </div>
 
       <div className="tabs" role="tablist">
+        <button role="tab" aria-selected={tab === "findings"} className={tab === "findings" ? "tab active" : "tab"} onClick={() => setTab("findings")}>
+          Findings
+        </button>
         <button role="tab" aria-selected={tab === "record"} className={tab === "record" ? "tab active" : "tab"} onClick={() => setTab("record")}>
           Claim record
         </button>
@@ -196,7 +200,14 @@ export default function ClaimDetail() {
           Documents ({claim.pages} pages)
         </button>
       </div>
-      {tab === "record" ? (
+      {tab === "findings" ? (
+        <FindingsView
+          claimId={claim.id}
+          canReview={can("claims.review") || can("claims.investigate")}
+          onShow={showOnPage}
+          refreshKey={`${claim.status}-${claim.processing_finished_at ?? ""}`}
+        />
+      ) : tab === "record" ? (
         <ClaimRecordView
           claimId={claim.id}
           canCorrect={can("claims.review")}

@@ -58,6 +58,10 @@ class Finding(Base):
     confidence: Mapped[float | None] = mapped_column(Float)
     needs_medical_review: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     model_version: Mapped[str | None] = mapped_column(String(80))  # set for AI findings
+    # Same rule + same evidence values = same fingerprint, so a re-run recognises a finding already reviewed.
+    fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
+    # False when a re-run no longer raises a finding that a reviewer had already acted on (kept as history).
+    is_current: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     claim: Mapped[Claim] = relationship(back_populates="findings")
@@ -80,3 +84,21 @@ class FindingReview(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     finding: Mapped[Finding] = relationship(back_populates="reviews")
+
+
+class CheckRun(Base):
+    """What happened when one check ran on one claim, so 'passed' is visible and not just 'flagged'.
+
+    status: passed | flagged | not_applicable | not_evaluable | pending_ai | disabled | error
+    """
+
+    __tablename__ = "check_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    claim_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("claims.id", ondelete="CASCADE"), index=True)
+    rule_id: Mapped[str] = mapped_column(ForeignKey("rules.id", ondelete="CASCADE"), index=True)
+    rule_version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20))
+    detail: Mapped[str | None] = mapped_column(Text)
+    finding_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -154,9 +154,13 @@ def tampered_amount(case, rng, ctx):
     line.amount = round(line.qty * line.rate, 2)
     line.font = "Times-Bold"
     finish(case)
+    also = ["B-03"] if line.category != "Room Rent" else []
+    cap = case.policy.room_rent_cap_pct
+    if line.category == "Room Rent" and cap and line.rate > case.policy.sum_insured * cap / 100:
+        also.append("B-08")  # the inflated room rent now breaks the policy's room-rent limit too
     return Issue("F-02", f"Amount for '{line.description}' printed in a different font from the rest of the bill "
                          f"(changed from Rs. {old:,.0f} to Rs. {line.amount:,.0f}).", ["final_bill"],
-                 line.description, round(line.amount - old, 2), also=["B-03"] if line.category != "Room Rent" else [])
+                 line.description, round(line.amount - old, 2), also=also)
 
 
 @seeder("F-03")

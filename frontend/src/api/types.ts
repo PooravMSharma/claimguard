@@ -438,3 +438,96 @@ export const FIELD_LABELS: Record<string, string> = {
   sub_limits: "Sub-limits", used_si: "Claims paid this year", balance_si: "Balance sum insured",
   id_last4: "ID (last 4)", birth_year: "Year of birth", ip_no: "IP no.",
 };
+
+// ---------- Step 9: checks and findings ----------
+
+export type Severity = "red" | "amber" | "info";
+
+export interface Evidence {
+  document: string | null;
+  page_id: string | null;
+  bbox: Bbox | null;
+  quote: string;
+}
+
+export interface FindingReview {
+  id: string;
+  action: "confirmed" | "dismissed";
+  reason: string | null;
+  reviewer: string | null;
+  created_at: string;
+}
+
+export interface Finding {
+  id: string;
+  rule_id: string;
+  rule_name: string;
+  layer: string;
+  severity: Severity;
+  title: string;
+  explanation: string;
+  evidence: Evidence[];
+  amount_at_stake: string | null;
+  suggested_deduction: string | null;
+  confidence: number | null;
+  needs_medical_review: boolean;
+  is_current: boolean;
+  status: "open" | "confirmed" | "dismissed";
+  created_at: string;
+  reviews: FindingReview[];
+}
+
+export interface FindingsResponse {
+  claim_id: string;
+  summary: { red: number; amber: number; info: number; open: number; amount_at_stake: string; suggested_deduction: string };
+  findings: Finding[];
+}
+
+export type CheckStatus =
+  | "passed"
+  | "flagged"
+  | "not_applicable"
+  | "not_evaluable"
+  | "pending_ai"
+  | "disabled"
+  | "error"
+  | "not_run";
+
+export interface CheckRunRow {
+  rule_id: string;
+  name: string;
+  layer: string;
+  method: string;
+  max_severity: Severity;
+  status: CheckStatus;
+  detail: string | null;
+  finding_count: number;
+}
+
+export interface ChecksResponse {
+  claim_id: string;
+  ran_at: string | null;
+  counts: Partial<Record<CheckStatus, number>>;
+  checks: CheckRunRow[];
+}
+
+export const LAYER_LABELS: Record<string, string> = {
+  completeness: "Completeness",
+  forensics: "Document forensics",
+  consistency: "Consistency across documents",
+  medical: "Medical necessity",
+  billing: "Billing",
+  policy: "Policy",
+  registry: "Registries",
+};
+
+export const CHECK_STATUS_LABELS: Record<CheckStatus, string> = {
+  passed: "Passed",
+  flagged: "Flagged",
+  not_applicable: "Not applicable",
+  not_evaluable: "Could not check",
+  pending_ai: "AI check (Step 10)",
+  disabled: "Disabled",
+  error: "Error",
+  not_run: "Not run",
+};

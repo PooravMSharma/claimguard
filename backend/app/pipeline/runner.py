@@ -184,7 +184,15 @@ def step_extract(db: Session, claim: Claim) -> None:
     store.save(db, claim, docs, corrections)
 
 
-STEPS = [("pages", step_pages), ("read", step_read), ("extract", step_extract)]
+def step_checks(db: Session, claim: Claim) -> None:
+    """Step 9: run the check catalogue over the claim record and store findings with their evidence."""
+    from app.rules.store import run_for_claim
+
+    counts = run_for_claim(db, claim)
+    log_event(db, "claim.checks_run", entity_type="claim", entity_id=claim.id, details=counts)
+
+
+STEPS = [("pages", step_pages), ("read", step_read), ("extract", step_extract), ("checks", step_checks)]
 
 
 def run_pipeline(db: Session, claim_id: uuid.UUID) -> Claim:

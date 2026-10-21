@@ -17,6 +17,13 @@ Synthetic claims (after python -m app.synthetic):
     docker compose exec backend python -m app.cli evaluate-reading
     docker compose exec backend python -m app.cli reprocess-synthetic
 
+Checks (Step 9):
+    docker compose exec backend python -m app.cli load-synthetic-reference      # synthetic benchmarks + registries
+    docker compose exec backend python -m app.cli import-registries --folder reference_data/raw/registries \
+        --version 2026-10 --source-name "Insurer extract 21 Oct 2026"
+    docker compose exec backend python -m app.cli run-checks --synthetic        # or --claim CG-SYN-0001
+    docker compose exec backend python -m app.cli evaluate-checks --misses 3
+
 AI model (after setting AI_PROVIDER / AI_MODEL in .env):
     docker compose exec worker python -m app.cli ai-check
     docker compose exec backend python -m app.cli evaluate-extraction
@@ -219,6 +226,71 @@ def ai_check() -> None:
           "Answered, but not the expected 'IPB/2026/4417'. Text-only model? Set AI_VISION=false or use a vision model.")
 
 
+def import_registries_cmd(folder: Path, version: str, source_name: str) -> None:
+    from app.services.reference.registries import RegistryImportError, import_registries
+
+    with SessionLocal() as db:
+        try:
+            rec, counts = import_registries(db, folder, source_name=source_name, version=version)
+        except (RegistryImportError, FileNotFoundError) as exc:
+            db.rollback()
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        _report(db, [rec])
+        db.commit()
+    shown = {k: v for k, v in vars(counts).items() if k != "files" and v is not None}
+    print("Done: " + ", ".join(f"{v} {k}" for k, v in shown.items()) + ".")
+
+
+SYNTHETIC_FROM = date(2025, 1, 1)
+
+
+def load_synthetic_reference(folder: Path) -> None:
+    """Synthetic package / tariff benchmarks and registries written by the generator (codes start SYN-)."""
+    ref, reg = folder / "reference", folder / "registries"
+    if not (ref / "packages.csv").exists():
+        print(f"Error: {ref / 'packages.csv'} not found. Re-run: python -m app.synthetic", file=sys.stderr)
+        sys.exit(1)
+    info = importers.SourceInfo(version="SYN-1", source_name="Synthetic benchmark (ClaimGuard generator)",
+                                source_url=None, effective_from=SYNTHETIC_FROM,
+                                notes="Synthetic test values, not official rates")
+    _run_import(lambda db: [importers.import_packages(db, ref / "packages.csv", info),
+                            importers.import_tariffs(db, ref / "tariffs.csv", TariffSource.CLIENT, info)])
+    import_registries_cmd(reg, "SYN-1", "Synthetic registries (ClaimGuard generator)")
+
+
+def run_checks_cmd(claim_number: str | None, synthetic: bool) -> None:
+    from sqlalchemy import select
+
+    from app.models.claim import Claim
+    from app.models.enums import ClaimStatus
+    from app.rules.reference import Reference
+    from app.rules.store import run_for_claim
+
+    with SessionLocal() as db:
+        stmt = select(Claim).where(Claim.status == ClaimStatus.READY_FOR_REVIEW)
+        if claim_number:
+            stmt = select(Claim).where(Claim.claim_number == claim_number)
+        elif synthetic:
+            stmt = stmt.where(Claim.source == "synthetic")
+        claims = db.scalars(stmt.order_by(Claim.claim_number)).all()
+        if not claims:
+            print("No matching claims ready for review.")
+            return
+        ref = Reference.from_db(db)       # load reference data once for all claims
+        totals: Counter = Counter()
+        for n, claim in enumerate(claims, 1):
+            counts = run_for_claim(db, claim, ref)
+            log_event(db, "claim.checks_run", entity_type="claim", entity_id=claim.id,
+                      details={**counts, "via": "cli run-checks"})
+            db.commit()
+            totals.update(counts)
+            if n % 25 == 0:
+                print(f"  {n} claims checked", flush=True)
+    print(f"Done: {len(claims)} claim(s) checked, {totals['findings']} findings "
+          f"({totals['red']} red, {totals['amber']} amber, {totals['info']} info).")
+
+
 def _add_source_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--file", type=Path, required=True, help="CSV or Excel file")
     p.add_argument("--sheet", help="Excel sheet name (default: first sheet)")
@@ -270,6 +342,18 @@ def main(argv: list[str] | None = None) -> None:
     rp.add_argument("--scanned", action="store_true", help="Only the scanned copies (CG-SYN-xxxx-S)")
     rp.add_argument("--clean", action="store_true", help="Only the clean copies")
     rp.add_argument("--limit", type=int, help="Only the first N (by claim number)")
+    ir = sub.add_parser("import-registries", help="Load doctor / hospital / watchlist / policy registries (CSV)")
+    ir.add_argument("--folder", type=Path, required=True, help="Folder with doctors.csv, hospitals.csv, ...")
+    ir.add_argument("--version", required=True)
+    ir.add_argument("--source-name", required=True)
+    ls = sub.add_parser("load-synthetic-reference", help="Load the synthetic set's benchmarks and registries")
+    ls.add_argument("--folder", type=Path, default=Path(__file__).resolve().parents[1] / "synthetic_data")
+    rc = sub.add_parser("run-checks", help="Run the checks again on claims that are ready for review")
+    rc.add_argument("--claim", help="One claim number")
+    rc.add_argument("--synthetic", action="store_true", help="All synthetic claims")
+    ec = sub.add_parser("evaluate-checks", help="Score the checks against the synthetic answers")
+    ec.add_argument("--folder", type=Path, default=Path(__file__).resolve().parents[1] / "synthetic_data")
+    ec.add_argument("--misses", type=int, default=0, help="Show up to N examples of missed and extra flags")
     args = parser.parse_args(argv)
 
     if args.command == "load-reference-defaults":
@@ -328,6 +412,20 @@ def main(argv: list[str] | None = None) -> None:
         ai_check()
     elif args.command == "reprocess-synthetic":
         reprocess_synthetic(args.scanned, args.clean, args.limit)
+    elif args.command == "import-registries":
+        import_registries_cmd(args.folder, args.version, args.source_name)
+    elif args.command == "load-synthetic-reference":
+        load_synthetic_reference(args.folder)
+    elif args.command == "run-checks":
+        if not args.claim and not args.synthetic:
+            parser.error("give --claim CG-... or --synthetic")
+        run_checks_cmd(args.claim, args.synthetic)
+    elif args.command == "evaluate-checks":
+        from app.rules.evaluate import evaluate as evaluate_checks
+
+        with SessionLocal() as db:
+            for label, score in evaluate_checks(db, args.folder).items():
+                print(score.report(label, args.misses) if score.claims else f"{label}: no claims")
 
     if args.command == "create-admin":
         password = sys.stdin.readline().rstrip("\n") if args.password_stdin else _ask_password()

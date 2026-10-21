@@ -32,7 +32,7 @@ from app.services.reference.tables import read_table
 from app.services.reference.tariffs import is_ward_uniform
 from app.services.reference.text import parse_bool, parse_int, parse_money, split_list
 
-DATASETS = ("packages", "tariffs", "non_payables", "icd10", "policy_terms")
+DATASETS = ("packages", "tariffs", "non_payables", "icd10", "policy_terms", "registries")
 
 
 class ReferenceImportError(Exception):
@@ -159,6 +159,7 @@ PACKAGE_COLUMNS = {
     "is_day_care": ["day care", "daycare"],
     "mandatory_documents": ["mandatory documents", "documents required"],
     "inclusions": ["package inclusions"],
+    "keywords": ["icd codes", "diagnosis codes", "match terms", "diagnosis keywords"],
 }
 
 
@@ -181,6 +182,7 @@ def import_packages(db: Session, path: Path, info: SourceInfo, sheet: str | None
                        is_day_care=parse_bool(r.get("is_day_care")),
                        mandatory_documents=split_list(r.get("mandatory_documents")),
                        inclusions=split_list(r.get("inclusions")),
+                       keywords=split_list(r.get("keywords")),
                        effective_from=info.effective_from, import_id=rec.id))
     rec.row_count = len(seen)
     db.flush()

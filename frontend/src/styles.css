@@ -1216,3 +1216,238 @@ a.button {
     box-shadow: 0 0 0 14px rgba(245, 158, 11, 0);
   }
 }
+
+/* ---------- Step 9: findings ---------- */
+
+.findings-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+.sev-counts,
+.money-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.money-summary span {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.money-summary strong {
+  color: var(--text);
+}
+
+.sev {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.sev-red {
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+
+.sev-amber {
+  background: #fff4e5;
+  color: #9a5b00;
+}
+
+.sev-info {
+  background: #e8f0fe;
+  color: #1a4fb4;
+}
+
+.finding-group {
+  margin: 18px 0;
+}
+
+.finding-group > summary {
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.finding {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+.finding-red {
+  border-left-color: var(--bad);
+}
+
+.finding-amber {
+  border-left-color: #e09a1a;
+}
+
+.finding-info {
+  border-left-color: #6b93e8;
+}
+
+.finding-reviewed {
+  opacity: 0.75;
+}
+
+.finding-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.finding-head h3 {
+  margin: 0;
+  font-size: 15px;
+  flex: 1 1 260px;
+}
+
+.rule-id {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.finding-text {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.finding-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 6px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.finding-meta .tag {
+  margin-left: 0;
+}
+
+.evidence {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.evidence li {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+.evidence .link-button {
+  text-align: left;
+  font-family: ui-monospace, monospace;
+  font-size: 12.5px;
+}
+
+.review-history {
+  list-style: none;
+  padding: 8px 0 0;
+  margin: 8px 0 0;
+  border-top: 1px dashed var(--border);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.tag.review-confirmed {
+  background: var(--bad-bg);
+  color: var(--bad);
+  border-color: transparent;
+}
+
+.tag.review-dismissed {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: transparent;
+}
+
+.finding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.review-box label {
+  display: block;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.review-box textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  font: inherit;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.checks-toggle {
+  margin: 20px 0 10px;
+  font-size: 14px;
+}
+
+.checks-table td {
+  vertical-align: top;
+}
+
+.checks-group {
+  font-weight: 600;
+  background: var(--bg);
+}
+
+.check-status {
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-passed {
+  color: var(--ok);
+}
+
+.status-flagged,
+.status-error {
+  color: var(--bad);
+}
+
+.status-not_evaluable {
+  color: #9a5b00;
+}
+
+.status-not_applicable,
+.status-pending_ai,
+.status-disabled,
+.status-not_run {
+  color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  .finding {
+    padding: 12px;
+  }
+
+  .checks-table th:nth-child(4),
+  .checks-table td:nth-child(4) {
+    display: none;
+  }
+}

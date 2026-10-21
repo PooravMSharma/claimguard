@@ -11,7 +11,15 @@ from app.api.deps import require_permission
 from app.core.permissions import Permission
 from app.db.session import get_db
 from app.models.enums import CityTier, TariffSource, WardType
-from app.models.reference import Icd10Code, NonPayableItem, Package, PolicyTerm, ReferenceImport, TariffRate
+from app.models.reference import (
+    Icd10Code,
+    NonPayableItem,
+    Package,
+    PolicyTerm,
+    ReferenceImport,
+    RegistryHospital,
+    TariffRate,
+)
 from app.models.user import User
 from app.schemas.reference import (
     DatasetSummary,
@@ -41,6 +49,7 @@ DATASETS = [
     ("non_payables", "IRDAI non-payable items", NonPayableItem),
     ("icd10", "ICD-10 codes", Icd10Code),
     ("policy_terms", "Policy terms", PolicyTerm),
+    ("registries", "Hospital registry", RegistryHospital),
 ]
 
 
