@@ -328,7 +328,9 @@ class ClaimContext:
         candidates = []
         for p in packages:
             keys = [k for k in p.keywords]
-            if category and any(k.upper() == category for k in keys) or diagnosis and any(len(k) > 4 and norm(k) and norm(k) in diagnosis for k in keys):
+            by_code = bool(category) and any(k.upper() == category for k in keys)
+            by_words = bool(diagnosis) and any(len(k) > 4 and norm(k) and norm(k) in diagnosis for k in keys)
+            if by_code or by_words:
                 candidates.append(p)
         if len(candidates) > 1:  # a medical and a surgical package for the same condition
             by_kind = [p for p in candidates if ("surgeon_fee" in p.inclusions) == surgical]

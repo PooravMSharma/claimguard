@@ -9,9 +9,11 @@ that applied on their admission date.
 
 import hashlib
 import json
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 from sqlalchemy import delete, select, update
@@ -25,6 +27,7 @@ from app.models.reference import (
     Package,
     PolicyTerm,
     ReferenceImport,
+    TariffMapping,
     TariffRate,
 )
 from app.services.reference.paths import ICD10_FILE, NON_PAYABLES_FILE, POLICY_TERMS_FILE
@@ -32,7 +35,7 @@ from app.services.reference.tables import read_table
 from app.services.reference.tariffs import is_ward_uniform
 from app.services.reference.text import parse_bool, parse_int, parse_money, split_list
 
-DATASETS = ("packages", "tariffs", "non_payables", "icd10", "policy_terms", "registries")
+DATASETS = ("packages", "tariffs", "tariff_mappings", "non_payables", "icd10", "policy_terms", "registries")
 
 
 class ReferenceImportError(Exception):
@@ -192,7 +195,7 @@ def import_packages(db: Session, path: Path, info: SourceInfo, sheet: str | None
 # ---------------------------------------------------------------- tariffs (CGHS / client)
 
 TARIFF_COLUMNS = {
-    "code": ["cghs code", "procedure code", "code no", "item code"],
+    "code": ["cghs code", "cghs code no", "procedure code", "code no", "item code"],
     "name": ["cghs treatment procedure/investigation list", "treatment procedure investigation list",
              "procedure name", "investigation", "procedure", "description", "name of procedure"],
     "category": ["section", "type", "group"],
@@ -203,8 +206,39 @@ TARIFF_COLUMNS = {
     "rate_super_speciality": ["super speciality", "superspeciality", "super speciality rate", "super specialty"],
     "city_tier": ["tier", "city"],
     "ward_type": ["ward"],
+    "facility": ["hospital type", "accreditation", "hospital category", "nabh status"],
     "max_los_days": ["los", "length of stay", "max los"],
 }
+# Facility column of a one-rate-per-row export (e.g. the CGHS portal's "Tier / Facility / Ward" download)
+FACILITY_GRADES = [("super", (True, True)), ("non", (False, False)), ("nabh", (True, False)), ("nabl", (True, False))]
+
+
+def _facility(value: object) -> tuple[bool | None, bool] | None:
+    text = re.sub(r"[^a-z]", "", str(value or "").lower())
+    if not text:
+        return None
+    for word, grade in FACILITY_GRADES:
+        if word in text:
+            return grade
+    raise ReferenceImportError(f"Unknown facility type {value!r} (expected NABH, Non-NABH or Super Speciality)")
+
+
+def _rate(value: object) -> tuple[Decimal | None, str | None]:
+    """A rate cell: '1,250.00' -> 1250. '38740+GST' -> 38740 (GST extra). '5,800 (Inclusive of GST)' -> 5800.
+    'Unlisted' / blank -> None: CGHS prices those case by case, so there is nothing to compare with."""
+    amount = parse_money(value)
+    if amount is not None:
+        return amount, None
+    text = str(value or "")
+    m = re.match(r"\s*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d+)?)", text, re.I)
+    if not m:
+        return None, None
+    amount = parse_money(m.group(1))
+    if re.search(r"(?i)\+\s*gst", text):
+        return amount, "plus GST"
+    if re.search(r"(?i)incl\w*\s+of\s+gst", text):
+        return amount, "including GST"
+    return amount, "number taken from a note"
 GRADE_COLUMNS = {"rate_non_nabh": (False, False), "rate_nabh": (True, False), "rate_super_speciality": (True, True)}
 
 
@@ -221,7 +255,8 @@ def _tier(value: object, default: CityTier) -> CityTier:
 
 
 def _ward(value: object, default: WardType) -> WardType:
-    text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    text = re.sub(r"\s*ward$", "", str(value or "").strip().lower()).replace("-", "_").replace(" ", "_")
+    text = {"twin_sharing": "semi_private", "semiprivate": "semi_private", "single": "private"}.get(text, text)
     try:
         return WardType(text) if text else default
     except ValueError:
@@ -248,30 +283,89 @@ def import_tariffs(db: Session, path: Path, source: TariffSource, info: SourceIn
                       TariffRate.effective_from < info.effective_from)
                .values(effective_to=info.effective_from - timedelta(days=1)))
 
-    count = 0
+    count = unpriced = 0
+    noted: dict[str, int] = {}
     for r in rows:
         code = str(r["code"] or "").strip().upper()
         name = str(r["name"] or "").strip()
         if not code or not name:
             continue
         category = (str(r["category"]).strip() or None) if r.get("category") else None
+        specialty = (str(r["specialty"]).strip()[:120] or None) if r.get("specialty") else None
         common = dict(
             source=source, code=code, name=name[:500], category=category[:80] if category else None,
-            specialty=(str(r["specialty"]).strip()[:120] or None) if r.get("specialty") else None,
+            specialty=specialty,
             city_tier=_tier(r.get("city_tier"), default_tier), ward_type=_ward(r.get("ward_type"), default_ward),
-            ward_uniform=is_ward_uniform(category, name), max_los_days=parse_int(r.get("max_los_days")),
+            ward_uniform=is_ward_uniform(category or specialty, name), max_los_days=parse_int(r.get("max_los_days")),
             effective_from=info.effective_from, import_id=rec.id,
         )
+        row_grade = _facility(r.get("facility"))
         for col in rate_cols:
-            amount = parse_money(r.get(col))
+            amount, note = _rate(r.get(col))
             if amount is None:
+                if str(r.get(col) or "").strip():
+                    unpriced += 1
                 continue
-            nabh, super_sp = GRADE_COLUMNS.get(col, (None, False))
+            if note:
+                noted[note] = noted.get(note, 0) + 1
+            nabh, super_sp = GRADE_COLUMNS.get(col) or row_grade or (None, False)
             db.add(TariffRate(rate=amount, nabh_accredited=nabh, super_speciality=super_sp, **common))
             count += 1
     if count == 0:
         raise ReferenceImportError("No rows with a rate were found")
     rec.row_count = count
+    summary = [f"{n} rate(s) {note}" for note, n in noted.items()]
+    if unpriced:
+        summary.append(f"{unpriced} item(s) without a fixed rate (e.g. 'Unlisted') skipped")
+    if summary:
+        rec.notes = "; ".join(filter(None, [rec.notes, "; ".join(summary)]))
+    db.flush()
+    return rec
+
+
+# ---------------------------------------------------------------- bill wording -> tariff item
+
+MAPPING_COLUMNS = {
+    "bill_text": ["bill wording", "bill item", "bill description", "hospital item", "description", "item"],
+    "code": ["tariff code", "cghs code", "benchmark code", "item code"],
+    "source": ["tariff source", "list"],
+    "note": ["notes", "comment"],
+}
+
+
+def import_tariff_mappings(db: Session, path: Path, info: SourceInfo, *, sheet: str | None = None,
+                           user_id: uuid.UUID | None = None) -> ReferenceImport:
+    """Confirmed links from a hospital's wording to a tariff item ("Hb%" -> LB007). Adds to or replaces earlier
+    links for the same wording; links to a code that is not in the loaded tariffs are refused."""
+    from app.rules.tariff_match import core
+
+    rows = read_table(path, MAPPING_COLUMNS, required=["bill_text", "code"], sheet=sheet)
+    known = {(s.value, c) for s, c in db.execute(select(TariffRate.source, TariffRate.code).distinct())}
+    rec = _record(db, "tariff_mappings", info, path, user_id)
+    done: dict[tuple[str, str], tuple[str, str | None]] = {}
+    unknown: list[str] = []
+    for r in rows:
+        text = core(str(r.get("bill_text") or ""))
+        code = str(r.get("code") or "").strip().upper()
+        source = str(r.get("source") or "cghs").strip().lower().replace("-", "")
+        if not text or not code:
+            continue
+        if (source, code) not in known:
+            unknown.append(code)
+            continue
+        note = str(r.get("note") or "").strip()[:300] or None
+        done[(source, text)] = (code, note)
+    if unknown:
+        raise ReferenceImportError(f"{len(unknown)} row(s) name a code that is not in the loaded tariffs, e.g. "
+                                   f"{', '.join(sorted(set(unknown))[:5])}. Load the tariff list first.")
+    if not done:
+        raise ReferenceImportError("No rows with a bill wording and a code were found")
+    for (source, text), (code, note) in done.items():
+        db.execute(pg_insert(TariffMapping).values(source=source, bill_text=text[:300], code=code, note=note,
+                                                   import_id=rec.id)
+                   .on_conflict_do_update(constraint="uq_tariff_mappings_source_text",
+                                          set_={"code": code, "note": note, "import_id": rec.id}))
+    rec.row_count = len(done)
     db.flush()
     return rec
 

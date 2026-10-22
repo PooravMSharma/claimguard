@@ -109,6 +109,24 @@ class TariffRate(TimestampMixin, Base):
     import_id: Mapped[int | None] = _import_fk()
 
 
+class TariffMapping(Base):
+    """A confirmed link from a hospital's bill wording to a tariff item, e.g. "hb%" -> CGHS LB007.
+
+    The rate check (B-03) uses these before trying to match the wording itself. `bill_text` is the core of the
+    wording as app.rules.tariff_match.core() reduces it, so "Hb %" and "HB%" are the same mapping.
+    """
+
+    __tablename__ = "tariff_mappings"
+    __table_args__ = (UniqueConstraint("source", "bill_text", name="uq_tariff_mappings_source_text"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(20), default="cghs")
+    bill_text: Mapped[str] = mapped_column(String(300))
+    code: Mapped[str] = mapped_column(String(32))
+    note: Mapped[str | None] = mapped_column(String(300))
+    import_id: Mapped[int | None] = _import_fk()
+
+
 class NonPayableItem(TimestampMixin, Base):
     """IRDAI standard list. List 1 = never paid; lists 2-4 = must be absorbed in room/procedure/treatment."""
 

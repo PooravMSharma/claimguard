@@ -23,6 +23,7 @@ from app.models.reference import (
     RegistryDoctor,
     RegistryHospital,
     RegistryWatchlist,
+    TariffMapping,
     TariffRate,
 )
 from app.services.reference.non_payables import NonPayableMatcher
@@ -53,6 +54,15 @@ class TariffRef:
     rate: Decimal
     effective_from: date | None = None
     effective_to: date | None = None
+    source: str = "client"                 # cghs | pmjay | client (synthetic benchmarks load as cghs)
+    kind: str | None = None                # test | consultation | procedure | cancer_procedure | ... (tariff_match)
+    nabh: bool | None = None               # rate for NABH hospitals (None: not stated)
+    super_speciality: bool = False
+    ward_uniform: bool = False             # same rate in every ward (tests, consultations...)
+
+    @property
+    def grade(self) -> str:
+        return "super_speciality" if self.super_speciality else ("non_nabh" if self.nabh is False else "nabh")
 
     def in_force(self, on: date | None) -> bool:
         if on is None:
@@ -68,6 +78,7 @@ class HospitalRef:
     name: str
     city: str | None
     city_tier: str
+    nabh: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -97,6 +108,24 @@ class Reference:
     hospitals: dict[str, HospitalRef] | None = None
     watchlist: dict[str, str] | None = None                 # rohini id -> reason
     policies: dict[str, list[PolicyRef]] | None = None      # policy no -> members
+    tariff_mappings: dict[str, str] = field(default_factory=dict)   # core of a bill wording -> tariff code
+
+    @property
+    def tariff_matcher(self):
+        """Fuzzy matcher over one row per tariff code (built once, on first use)."""
+        if getattr(self, "_matcher", None) is None:
+            from app.rules.tariff_match import build
+
+            seen: dict[str, int] = {}
+            for i, t in enumerate(self.tariffs):
+                seen.setdefault(f"{t.source}|{t.code}", i)
+            self._index = list(seen.values())
+            self._matcher = build([(self.tariffs[i].name, self.tariffs[i].code, self.tariffs[i].kind,
+                                    float(self.tariffs[i].rate), self.tariffs[i].source) for i in self._index])
+        return self._matcher
+
+    def tariff_at(self, match_key: int) -> "TariffRef":
+        return self.tariffs[self._index[match_key]]
 
     def term(self, key: str, product: str | None = None) -> dict | None:
         """A policy term: the product's own value if it has one, else the standard value."""
@@ -126,12 +155,23 @@ class Reference:
         for t in db.scalars(select(PolicyTerm)):
             terms.setdefault(t.product_code, {})[t.key] = t.value
         items = list(db.scalars(select(NonPayableItem)))
+        # several package lists can be loaded (e.g. the synthetic set and HBP 2022): for a code that appears in
+        # more than one, the most recently imported row wins
+        latest: dict[str, Package] = {}
+        for p in db.scalars(select(Package).order_by(Package.id)):
+            latest[p.code] = p
         packages = [PackageRef(p.code, p.name, p.rate, p.expected_los_days, p.is_day_care, tuple(p.inclusions or []),
-                               tuple(p.keywords or [])) for p in db.scalars(select(Package))]
+                               tuple(p.keywords or [])) for p in latest.values()]
+        from app.rules.tariff_match import tariff_kind
+
         tariffs = [TariffRef(t.code, t.name, t.category, t.city_tier.value, t.ward_type.value, t.rate,
-                             t.effective_from, t.effective_to) for t in db.scalars(select(TariffRate))]
+                             t.effective_from, t.effective_to, t.source.value,
+                             tariff_kind(t.code, t.specialty, t.category), t.nabh_accredited, t.super_speciality,
+                             t.ward_uniform)
+                   for t in db.scalars(select(TariffRate).order_by(TariffRate.id))]
+        mappings = {m.bill_text: m.code for m in db.scalars(select(TariffMapping).order_by(TariffMapping.id))}
         doctors = {d.registration_no.upper(): d.name for d in db.scalars(select(RegistryDoctor))}
-        hospitals = {h.rohini_id: HospitalRef(h.rohini_id, h.hfr_id, h.name, h.city, h.city_tier.value)
+        hospitals = {h.rohini_id: HospitalRef(h.rohini_id, h.hfr_id, h.name, h.city, h.city_tier.value, h.nabh)
                      for h in db.scalars(select(RegistryHospital))}
         watch = {w.rohini_id: w.reason for w in db.scalars(select(RegistryWatchlist))}
         policies: dict[str, list[PolicyRef]] = {}
@@ -144,7 +184,8 @@ class Reference:
         return cls(terms=terms, non_payables=NonPayableMatcher(items) if items else None, packages=packages,
                    tariffs=tariffs, doctors=doctors if registries_loaded else None,
                    hospitals=hospitals if registries_loaded else None,
-                   watchlist=watch if registries_loaded else None, policies=policies or None)
+                   watchlist=watch if registries_loaded else None, policies=policies or None,
+                   tariff_mappings=mappings)
 
     @classmethod
     def from_files(cls, synthetic_root: Path | None = None) -> "Reference":

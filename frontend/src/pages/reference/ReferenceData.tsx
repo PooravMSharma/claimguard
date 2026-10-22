@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { api } from "../../api/client";
+import { useAuth } from "../../auth/AuthContext";
+import { Field, clean, type Json } from "../../components/ValueEditor";
 import type {
+  ReferenceImport,
   DatasetSummary,
   IcdCode,
   NonPayable,
@@ -150,9 +153,10 @@ function Overview() {
         </table>
       </div>
       <p className="muted">
-        Reference data is loaded by an admin with <code>python -m app.cli</code>. Every row keeps a link to the
-        official document it came from.
+        Every row keeps a link to the official document it came from. Admins load new versions below or with{" "}
+        <code>python -m app.cli</code>.
       </p>
+      <ImportForm onDone={() => api.get<DatasetSummary[]>("/reference/summary").then(setData).catch(() => undefined)} />
     </>
   );
 }
@@ -634,13 +638,21 @@ function formatValue(value: Record<string, unknown>): string {
   if (value.codes && typeof value.codes === "object") return `${Object.keys(value.codes as object).length} exclusion codes`;
   return Object.entries(value)
     .filter(([k]) => k !== "typical")
-    .map(([k, v]) => `${k.replace(/_/g, " ")}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
+    .map(([k, v]) => {
+      const text = Array.isArray(v)
+        ? v.every((x) => typeof x !== "object") ? v.join(", ") : `${v.length} ${k.replace(/_/g, " ")}`
+        : v && typeof v === "object" ? `${Object.keys(v).length} items` : String(v);
+      return Array.isArray(v) && v.some((x) => typeof x === "object") ? text : `${k.replace(/_/g, " ")}: ${text}`;
+    })
     .join(" · ");
 }
 
 function PolicyTerms() {
+  const { can } = useAuth();
+  const canEdit = can("reference.manage");
   const [terms, setTerms] = useState<PolicyTermRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -666,23 +678,214 @@ function PolicyTerms() {
               <th>Value</th>
               <th>Meaning</th>
               <th>Source</th>
+              {canEdit && <th aria-label="Edit" />}
             </tr>
           </thead>
           <tbody>
-            {terms.map((t) => (
-              <tr key={t.key}>
-                <td className="nowrap">
-                  <code>{t.key}</code>
-                  {Boolean(t.value.typical) && <span className="tag">typical</span>}
-                </td>
-                <td>{formatValue(t.value)}</td>
-                <td className="small">{t.description}</td>
-                <td className="muted small">{t.source}</td>
-              </tr>
-            ))}
+            {terms.map((t) =>
+              editing === t.key ? (
+                <tr key={t.key}>
+                  <td colSpan={canEdit ? 5 : 4}>
+                    <TermEditor
+                      term={t}
+                      onCancel={() => setEditing(null)}
+                      onSaved={(updated) => {
+                        setTerms(terms.map((x) => (x.key === updated.key ? updated : x)));
+                        setEditing(null);
+                      }}
+                    />
+                  </td>
+                </tr>
+              ) : (
+                <tr key={t.key}>
+                  <td className="nowrap">
+                    <code>{t.key}</code>
+                    {Boolean(t.value.typical) && <span className="tag">typical</span>}
+                  </td>
+                  <td>{formatValue(t.value)}</td>
+                  <td className="small">{t.description}</td>
+                  <td className="muted small">{t.source}</td>
+                  {canEdit && (
+                    <td>
+                      <button className="link-button" onClick={() => setEditing(t.key)}>
+                        Edit
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ),
+            )}
           </tbody>
         </table>
       </div>
     </>
+  );
+}
+
+function TermEditor({ term, onCancel, onSaved }: {
+  term: PolicyTermRow;
+  onCancel: () => void;
+  onSaved: (t: PolicyTermRow) => void;
+}) {
+  const [value, setValue] = useState<Json>(term.value as Json);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      onSaved(
+        await api.put<PolicyTermRow>(`/reference/policy-terms/${term.key}`, {
+          product_code: term.product_code,
+          value: clean(value),
+          reason: reason.trim(),
+        }),
+      );
+    } catch (err) {
+      setError(errorText(err, "Could not save the term"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="term-editor">
+      <strong>
+        <code>{term.key}</code>
+      </strong>
+      <span className="muted small"> {term.description}</span>
+      <div className="value-group">
+        <Field name={term.key} value={value} shape={term.value as Json} onChange={setValue} />
+      </div>
+      <label className="block">
+        Reason (kept in the audit log)
+        <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
+      </label>
+      {error && <p className="error-text">{error}</p>}
+      <div className="finding-actions">
+        <button className="button" onClick={save} disabled={busy || reason.trim().length < 5}>
+          {busy ? "Saving…" : "Save term"}
+        </button>
+        <button className="link-button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- imports (admin)
+
+const DATASET_HELP: Record<string, string> = {
+  packages: "PM-JAY HBP package list (CSV or Excel). Columns: code, name, specialty, rate, expected LOS, day care, …",
+  tariffs: "A tariff (CSV or Excel): CGHS rates or the client's own. Columns: code, name, category, rates by grade, …",
+  registries: "Registry CSVs from the insurer: doctors.csv, hospitals.csv, watchlist.csv, policies.csv (any of them).",
+  tariff_mappings:
+    "Confirmed links from a hospital's bill wording to a tariff code (CSV: Bill wording, Tariff code). Start from the file `python -m app.cli tariff-match-report` writes, corrected. The rate check uses these before matching wording itself.",
+};
+
+function ImportForm({ onDone }: { onDone: () => void }) {
+  const { can } = useAuth();
+  const [dataset, setDataset] = useState<"packages" | "tariffs" | "tariff_mappings" | "registries">("packages");
+  const [files, setFiles] = useState<File[]>([]);
+  const [version, setVersion] = useState("");
+  const [sourceName, setSourceName] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [effective, setEffective] = useState("");
+  const [tariffSource, setTariffSource] = useState("cghs");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<ReferenceImport[] | null>(null);
+  if (!can("reference.manage")) return null;
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setDone(null);
+    try {
+      const form = new FormData();
+      form.append("dataset", dataset);
+      files.forEach((f) => form.append("files", f, f.name));
+      form.append("version", version.trim());
+      form.append("source_name", sourceName.trim());
+      if (sourceUrl.trim()) form.append("source_url", sourceUrl.trim());
+      if (effective) form.append("effective_from", effective);
+      if (dataset === "tariffs") form.append("tariff_source", tariffSource);
+      setDone(await api.upload<ReferenceImport[]>("/reference/imports", form));
+      setFiles([]);
+      setError(null);
+      onDone();
+    } catch (err) {
+      setError(errorText(err, "Could not import the file"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="card import-form" onSubmit={submit}>
+      <h2 className="section-title">Load a new version</h2>
+      <p className="muted small">{DATASET_HELP[dataset]} The file is checked first; nothing changes if it is refused.</p>
+      <div className="form-grid">
+        <label>
+          Dataset
+          <select value={dataset} onChange={(e) => setDataset(e.target.value as typeof dataset)}>
+            <option value="packages">PM-JAY packages</option>
+            <option value="tariffs">Tariff rates</option>
+            <option value="tariff_mappings">Bill wording links (to tariff codes)</option>
+            <option value="registries">Registries (doctors, hospitals, watchlist, policies)</option>
+          </select>
+        </label>
+        {dataset === "tariffs" && (
+          <label>
+            Tariff
+            <select value={tariffSource} onChange={(e) => setTariffSource(e.target.value)}>
+              <option value="cghs">CGHS</option>
+              <option value="pmjay">PM-JAY</option>
+              <option value="client">Client's own</option>
+            </select>
+          </label>
+        )}
+        <label>
+          File{dataset === "registries" ? "s" : ""}
+          <input
+            type="file"
+            multiple={dataset === "registries"}
+            accept=".csv,.xlsx,.xlsm"
+            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+          />
+        </label>
+        <label>
+          Version
+          <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="e.g. HBP2022 or CGHS-2025-10" />
+        </label>
+        <label>
+          Official source
+          <input value={sourceName} onChange={(e) => setSourceName(e.target.value)} placeholder="e.g. CGHS OM dated 03.10.2025, Annexure I" />
+        </label>
+        <label>
+          Source link (optional)
+          <input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://…" />
+        </label>
+        <label>
+          In force from{dataset === "tariffs" ? "" : " (optional)"}
+          <input type="date" value={effective} onChange={(e) => setEffective(e.target.value)} />
+        </label>
+      </div>
+      {error && <p className="error-text" role="alert">{error}</p>}
+      {done && (
+        <p className="notice-info small">
+          Loaded {done.map((d) => `${d.row_count.toLocaleString("en-IN")} rows (${d.dataset} ${d.version})`).join(", ")}.
+          Checks use it from their next run. Earlier versions stay loaded; for a code in both, the newest row is used.
+        </p>
+      )}
+      <button
+        className="button"
+        disabled={busy || files.length === 0 || !version.trim() || sourceName.trim().length < 3 || (dataset === "tariffs" && !effective)}
+      >
+        {busy ? "Loading…" : "Check and load"}
+      </button>
+    </form>
   );
 }

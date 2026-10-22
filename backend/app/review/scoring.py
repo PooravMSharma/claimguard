@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.claim import Claim
-from app.models.enums import ReviewAction, RiskBand
+from app.models.enums import ReviewAction, RiskBand, RuleStatus
 from app.models.rules import Finding, Rule
 from app.rules.catalogue import CHECKS, SEVERITY_ORDER
 from app.rules.defaults import default_weight
@@ -115,10 +115,12 @@ def compute(items: list[Item], weights: dict[str, int]) -> Score:
 
 
 def items_for(db: Session, claim_id: uuid.UUID) -> list[Item]:
+    """The claim's current findings, leaving out rules an admin has disabled since they were raised."""
+    disabled = set(db.scalars(select(Rule.id).where(Rule.status == RuleStatus.DISABLED)))
     rows = db.scalars(select(Finding).where(Finding.claim_id == claim_id, Finding.is_current.is_(True))
                       .options(selectinload(Finding.reviews))).all()
     return [Item(f.rule_id, f.severity.value, latest_status(f.reviews), f.needs_medical_review,
-                 f.amount_at_stake, f.suggested_deduction) for f in rows]
+                 f.amount_at_stake, f.suggested_deduction) for f in rows if f.rule_id not in disabled]
 
 
 def weights(db: Session) -> dict[str, int]:

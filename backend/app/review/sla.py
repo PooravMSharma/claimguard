@@ -1,8 +1,10 @@
 """Review deadlines (IRDAI Master Circular on Health Insurance, 2024).
 
 - Final cashless: the insurer decides on the discharge authorisation within 3 hours of the request.
-- Reimbursement: settle within 15 days of receiving the last necessary document.
 - Pre-authorisation: decide within 1 hour.
+- Reimbursement: 15 days, as reported for the 2024 Master Circular. The older policyholder-protection rules
+  allowed 30 days from the last necessary document (the bundled policy terms still say 30), so confirm the
+  client's target and set SLA_REIMBURSEMENT_DAYS.
 
 The clock starts when the claim reaches ClaimGuard: the hospital's own request time is not in the file in a
 form we can trust yet. Synthetic test claims get no deadline (they were generated, not received).

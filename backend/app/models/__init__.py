@@ -23,9 +23,10 @@ from app.models.reference import (
     RegistryDoctor,
     RegistryHospital,
     RegistryWatchlist,
+    TariffMapping,
     TariffRate,
 )
-from app.models.rules import CheckRun, Finding, FindingReview, Rule
+from app.models.rules import CheckRun, Finding, FindingReview, Rule, RuleChange
 from app.models.user import AuditLog, Role, User
 
 __all__ = [
@@ -53,10 +54,12 @@ __all__ = [
     "Procedure",
     "Role",
     "Rule",
+    "RuleChange",
     "ReferenceImport",
     "RegistryDoctor",
     "RegistryHospital",
     "RegistryWatchlist",
+    "TariffMapping",
     "TariffRate",
     "User",
 ]

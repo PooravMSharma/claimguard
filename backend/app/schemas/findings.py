@@ -77,15 +77,3 @@ class ChecksResponse(BaseModel):
 class ReviewIn(BaseModel):
     action: Literal["confirmed", "dismissed", "noted"]
     reason: str | None = Field(default=None, max_length=2000)
-
-
-class RuleOut(BaseModel):
-    id: str
-    name: str
-    layer: str
-    method: str
-    max_severity: str
-    weight: int
-    status: str
-    version: int
-    config: dict

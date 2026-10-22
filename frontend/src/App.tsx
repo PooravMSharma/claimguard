@@ -10,6 +10,8 @@ import UploadClaim from "./pages/claims/UploadClaim";
 import ReferenceData from "./pages/reference/ReferenceData";
 import SystemStatus from "./pages/SystemStatus";
 import AuditLog from "./pages/admin/AuditLog";
+import RuleDetail from "./pages/admin/RuleDetail";
+import Rules from "./pages/admin/Rules";
 import Users from "./pages/admin/Users";
 
 export default function App() {
@@ -53,6 +55,22 @@ export default function App() {
           element={
             <RequireAuth permission="reference.view">
               <ReferenceData />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/rules"
+          element={
+            <RequireAuth permission="rules.view">
+              <Rules />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/rules/:id"
+          element={
+            <RequireAuth permission="rules.view">
+              <RuleDetail />
             </RequireAuth>
           }
         />

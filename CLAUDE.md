@@ -33,8 +33,9 @@ published guidelines and are capped at **amber** until a clinician has reviewed 
 backend/
   app/
     ai/            provider interface + Ollama/Anthropic clients (structured JSON answers)
-    api/routes/    auth, users, audit, health, reference, claims (queue), record, findings, review (summary,
-                   assign, decisions, query letter)
+    api/routes/    auth, users, audit, health, reference (read), reference_admin (file imports, policy-term
+                   edits), claims (queue), record, findings, review (summary, assign, decisions, query letter),
+                   rules (rule library)
     core/          config (Settings from .env), security, logging
     db/            session
     extraction/    claim record: values (parsing), layout (lines/labels/tables), documents (per-type
@@ -45,7 +46,8 @@ backend/
                    policy); context.py (claim as checks see it); checks/ (one function per check, by layer;
                    judgement.py = the AI checks); ai_review.py (AI reviewer: facts pack, questions, cache);
                    pdf_fonts.py (fonts in digital PDFs, F-02/F-04); reference.py (lookups); defaults.py
-                   (thresholds); store.py (rules table, save findings, AI cache/log); evaluate.py (score vs truth)
+                   (thresholds); store.py (rules table, save findings, AI cache/log); evaluate.py (score vs truth);
+                   library.py (admin edits: validation, versions, history, dismissal stats)
     review/        Step 11: scoring.py (risk score / band / suggested payable), sla.py (IRDAI deadlines),
                    letters.py (query letter draft)
     schemas/       pydantic API schemas
@@ -53,14 +55,15 @@ backend/
     synthetic/     synthetic claim generator (ground truth for every check)
     worker/        RQ entry point and jobs
     cli.py         admin commands (see below)
-  migrations/versions/   0001..0008 (Alembic)
+  migrations/versions/   0001..0009 (Alembic)
   reference_data/        bundled defaults; raw/ holds official files (CGHS, HBP) when supplied
   tests/
 frontend/src/
   api/ (client.ts, types.ts)  auth/  components/
   pages/claims/ (ClaimQueue, UploadClaim, ClaimDetail = review screen, ReviewHeader, FindingsView,
                  DecisionPanel, ClaimRecordView, PageViewer)
-  pages/admin/ (Users, AuditLog)  pages/reference/ReferenceData.tsx
+  pages/admin/ (Users, AuditLog, Rules, RuleDetail)  pages/reference/ReferenceData.tsx (+ import form,
+  policy-term editor)  components/ValueEditor.tsx (edits a settings value keeping its shape)
 ```
 
 Two files are named `record.py` (`api/routes/record.py` and `schemas/record.py`), and the same goes for
@@ -82,6 +85,8 @@ docker compose exec backend pytest           # full test suite (expected: all pa
 create-admin --email you@company.in --name "Your Name"
 load-reference-defaults                      # IRDAI non-payables, standard policy terms, ICD-10
 import-tariffs / import-packages             # official CGHS / PM-JAY files (see reference_data/README.md)
+tariff-match-report --out storage/tariff_matches.csv   # bill wording -> tariff item, to confirm
+import-tariff-mappings --file F --version V --source-name S   # confirmed bill wording links
 reference-status
 import-registries --folder <dir> --version V --source-name S   # doctors/hospitals/watchlist/policies CSVs
 load-synthetic-reference                     # synthetic benchmarks (SYN- codes) + registries from the generator
@@ -143,11 +148,23 @@ Build plan: 14 steps.
   decision panel (approve / with deductions / query with letter draft / escalate / SIU) and assignment.
   Offline (300 clean, rules only): stored band matches the seeded band on 286/300; all 14 differences are
   claims whose only seeded issue is an AI check (no model offline).
-- **Next: Step 12, admin and rules management.**
-- Then: 13 evaluation on freshly regenerated
-  synthetic data, 14 hardening.
-- Still pending from the client: the official CGHS OM (03.10.2025, Annexure I) and the PM-JAY HBP 2022
-  package list (backend/reference_data/raw/). Until then benchmarks are the synthetic SYN- set.
+- Step 12: rule library (status, weight, highest severity, thresholds, source; every change needs a reason,
+  bumps the version, is kept in rule_changes and the audit log; weight / status changes re-score open claims;
+  medical rules become clinician-reviewed only with the clinician's name; dismissal rate per rule over 90 days,
+  rules dismissed >= 50% of >= 5 reviews marked "retune"); reference file imports from the browser (packages,
+  tariffs, registries; same importers as the CLI); policy-term edits keeping the value's shape. When package
+  lists overlap, the most recently imported row per code is used.
+- Step 13 (docs/step-13-benchmarks.md): the CGHS download loads as is (tier / facility / ward columns, "+GST",
+  "Unlisted"). B-03 finds the tariff item by confirmed link -> same wording -> close wording
+  (rules/tariff_match.py; same kind of charge only; ambiguous -> not compared), agreed tariffs before CGHS, and
+  adjusts CGHS for city tier, hospital grade and ward (unknown -> highest rate). Against CGHS: flagged only above
+  2.5x (`over_cghs_pct`), no suggested deduction. `tariff-match-report` + "Bill wording links" import
+  (tariff_mappings, migration 0010). Fresh seed 2026: clean 300 recall 100% / precision 100%, 0 red on genuine
+  (also with real CGHS loaded); fixes: M-05 seeder, "0..." amounts from OCR treated as unread, "Procedure
+  charges" lines are the procedure category.
+- **Next: Step 14, hardening.**
+- Still pending from the client: the PM-JAY HBP 2022 package list, and the insurer's own agreed hospital tariffs
+  (until then rates are compared with CGHS, a government reference rate).
 
 ## Conventions
 
@@ -159,13 +176,15 @@ Build plan: 14 steps.
   - Values from either source go through `documents.normalize()` so they have the same shape.
 - **Reviewer corrections survive reprocessing** (`extraction/store.py` keeps them). Never overwrite them.
 - **Audit everything that changes state:** `services/audit.log_event(...)`.
-- **Schema changes = a new Alembic migration** in `migrations/versions/` (next is `0009_...`). Never edit an
+- **Schema changes = a new Alembic migration** in `migrations/versions/` (next is `0010_...`). Never edit an
   applied migration.
 - **Checks:** one function per check in `app/rules/checks/<layer>.py`, registered with `@check("B-01")`.
   Thresholds live in `rules.config` (defaults in `rules/defaults.py`), never in the check. A check returns
   passed / flagged / not_applicable / not_evaluable; the engine applies the severity policy (cap at the
   rule's max; medical amber until clinician-reviewed; red downgraded to amber when evidence could be a misread).
 - **Findings that a reviewer has confirmed or dismissed are never deleted**; re-runs match them by fingerprint.
+- **Rule settings change only through `rules/library.update_rule`** (validated, versioned, audited). A threshold
+  key a check reads must exist in `rules/defaults.py`; unknown keys are refused.
 - **Review workflow:** a note never settles a finding; medical-necessity findings are confirmed or dismissed only
   by a senior / medical reviewer (`claims.review_escalated`); approval needs every red and amber finding
   reviewed; after "escalate" only a senior reviewer decides; approve / approve with deductions close the claim.

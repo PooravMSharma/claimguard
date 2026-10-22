@@ -10,6 +10,9 @@ Reference data:
     docker compose exec backend python -m app.cli import-packages --file reference_data/raw/hbp.xlsx \
         --version HBP2022 --effective-from 2022-04-01 --source-name "NHA HBP 2022"
     docker compose exec backend python -m app.cli reference-status
+    docker compose exec backend python -m app.cli tariff-match-report --out storage/tariff_matches.csv
+    docker compose exec backend python -m app.cli import-tariff-mappings --file storage/tariff_matches.csv \
+        --version links-2026-10 --source-name "Bill wording links confirmed by <name>"
 
 Synthetic claims (after python -m app.synthetic):
     docker compose exec backend python -m app.cli import-synthetic --limit 50
@@ -324,6 +327,45 @@ def rescore_cmd() -> None:
     print(f"Scored {len(claims)} claim(s): {bands['red']} red, {bands['amber']} amber, {bands['green']} green.")
 
 
+def tariff_match_report_cmd(out: Path, limit: int | None) -> None:
+    """Every distinct bill wording on the claims in review and the tariff item B-03 compares it with."""
+    from sqlalchemy import select
+
+    from app.models.claim import Claim
+    from app.models.enums import ClaimStatus
+    from app.rules.reference import Reference
+    from app.rules.store import load_context, sync_rules
+    from app.rules.tariff_report import collect, write_csv
+
+    with SessionLocal() as db:
+        claims = db.scalars(select(Claim).where(Claim.status.in_([ClaimStatus.READY_FOR_REVIEW,
+                                                                   ClaimStatus.IN_REVIEW]))
+                            .order_by(Claim.claim_number)).all()
+        if limit:
+            claims = claims[:limit]
+        ref = Reference.from_db(db)
+        if not ref.tariffs:
+            print("No tariffs are loaded: import CGHS (or a client tariff) first.")
+            return
+        configs = {rid: view.config for rid, view in sync_rules(db).items()}
+
+        def contexts():
+            for claim in claims:
+                ctx = load_context(db, claim, ref, read_file=lambda _key: b"")
+                ctx.config.update(configs)
+                yield ctx
+
+        rows = collect(contexts())
+        db.rollback()
+    write_csv(rows, out)
+    matched = sum(1 for r in rows if r.code)
+    confirmed = sum(1 for r in rows if r.how == "confirmed mapping")
+    print(f"{len(rows)} distinct bill wording(s) on {len(claims)} claim(s): {matched} matched to a tariff item "
+          f"({confirmed} by a confirmed link), {len(rows) - matched} not matched.")
+    print(f"Wrote {out}. Correct the Tariff code column (blank it to leave a wording unmatched), then import it on "
+          "Reference data as 'Bill wording links'.")
+
+
 def _add_source_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--file", type=Path, required=True, help="CSV or Excel file")
     p.add_argument("--sheet", help="Excel sheet name (default: first sheet)")
@@ -390,6 +432,12 @@ def main(argv: list[str] | None = None) -> None:
     ec = sub.add_parser("evaluate-checks", help="Score the checks against the synthetic answers")
     ec.add_argument("--folder", type=Path, default=Path(__file__).resolve().parents[1] / "synthetic_data")
     ec.add_argument("--misses", type=int, default=0, help="Show up to N examples of missed and extra flags")
+    tm = sub.add_parser("tariff-match-report",
+                        help="CSV of bill wordings and the tariff item each is compared with, to confirm")
+    tm.add_argument("--out", type=Path, default=Path("tariff_matches.csv"))
+    tm.add_argument("--limit", type=int, help="Only the first N claims (by claim number)")
+    mp = sub.add_parser("import-tariff-mappings", help="Import confirmed bill wording -> tariff code links (CSV)")
+    _add_source_args(mp)
     args = parser.parse_args(argv)
 
     if args.command == "load-reference-defaults":
@@ -400,6 +448,10 @@ def main(argv: list[str] | None = None) -> None:
         _run_import(lambda db: [importers.import_tariffs(
             db, args.file, TariffSource(args.source), _source_info(args), sheet=args.sheet,
             default_tier=CityTier(args.city_tier), default_ward=WardType(args.ward))])
+    elif args.command == "import-tariff-mappings":
+        _run_import(lambda db: [importers.import_tariff_mappings(db, args.file, _source_info(args), sheet=args.sheet)])
+    elif args.command == "tariff-match-report":
+        tariff_match_report_cmd(args.out, args.limit)
     elif args.command == "reference-status":
         reference_status()
     elif args.command == "import-synthetic":

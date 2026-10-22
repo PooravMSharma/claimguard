@@ -102,3 +102,23 @@ class CheckRun(Base):
     detail: Mapped[str | None] = mapped_column(Text)
     finding_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RuleChange(Base):
+    """One edit to a rule in the library: what changed, who changed it, and why. Never edited or deleted.
+
+    Findings keep the rule version that raised them, so a past result can always be explained with the
+    settings in force at the time.
+    """
+
+    __tablename__ = "rule_changes"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    rule_id: Mapped[str] = mapped_column(ForeignKey("rules.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)                  # the rule's version after this change
+    changed_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    changes: Mapped[dict] = mapped_column(JSONB)                   # {"weight": [15, 25], "config": [{...}, {...}]}
+    reason: Mapped[str] = mapped_column(Text)
+    clinician: Mapped[str | None] = mapped_column(String(200))     # who reviewed a medical rule, when that changed
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+

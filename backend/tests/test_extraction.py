@@ -105,6 +105,8 @@ def test_value_parsers():
     assert parse_datetime("31/02/2026") is None
     assert parse_amount("Rs. 1,50,000.00") == Decimal("150000.00")
     assert parse_amount("Approved amount (Rs.)85,100.00") == Decimal("85100.00")
+    assert parse_amount("§00,000") is None              # scan lost the leading 5 of 5,00,000: not zero
+    assert parse_amount("0.50") == Decimal("0.50")
     assert parse_age_sex("37 Y / M") == (37, "M") and parse_age_sex("65 Years / Female") == (65, "F")
     assert find_icd("Dengue fever (ICD-10: A90)") == "A90" and find_icd("fracture (S72.001A)") == "S72.001A"
     assert strip_icd("Dengue fever (ICD-10: A90)") == "Dengue fever"

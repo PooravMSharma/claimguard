@@ -334,6 +334,8 @@ def icu_not_needed(case, rng, ctx):
 @seeder("M-05", fits=lambda s: overnight(s) and s.los_norm > 0)
 def long_stay(case, rng, ctx):
     extra = rng.randint(4, 6)
+    # long enough to be over the norm plus M-05's default allowance of 2 days, whatever the case's own stay was
+    extra = max(extra, case.scenario.los_norm + 3 - case.los_days)
     case.discharge += timedelta(days=extra)
     rate = round(ROOM_RATE[case.ward_type] * tier(case))
     for line in case.bill:

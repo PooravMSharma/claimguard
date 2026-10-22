@@ -1,6 +1,7 @@
 """B-layer (rule part): arithmetic, claimed vs billed, benchmarks, non-payables, room, multiple surgery, MRP."""
 
 import re
+from dataclasses import dataclass
 from decimal import Decimal
 
 from app.models.enums import BillCategory
@@ -146,20 +147,113 @@ def _candidates(ctx: ClaimContext, line: Line) -> list[str]:
     return [norm(n) for n in names]
 
 
-def benchmark(ctx: ClaimContext, line: Line) -> TariffRef | None:
-    names = set(_candidates(ctx, line))
-    on = line.day or (ctx.admission.date() if ctx.admission else None)
+@dataclass
+class Bench:
+    ref: TariffRef
+    rate: Decimal                       # the benchmark for this claim, after any CGHS adjustment
+    how: str                            # how the bill line was matched to the item
+    adjustments: list[str]
+
+
+CANCER_ICD = re.compile(r"^(C\d|D0\d|D[1-4]\d)", re.I)
+
+
+def _cancer(ctx: ClaimContext) -> bool:
+    hit = ctx.first("icd_code")
+    return bool(hit and CANCER_ICD.match(re.sub(r"[^A-Z0-9]", "", hit[1].text.upper())))
+
+
+def _hospital_grade(ctx: ClaimContext) -> str | None:
+    hospital = ctx.ref.hospitals.get(ctx.rohini_id) if ctx.ref.hospitals and ctx.rohini_id else None
+    if hospital is None or hospital.nabh is None:
+        return None
+    return "nabh" if hospital.nabh else "non_nabh"
+
+
+def _cghs_rate(row: TariffRef, tier: str, ward: str | None, grade: str | None) -> tuple[Decimal, list[str]]:
+    """A CGHS rate for this claim's city tier, ward and hospital grade (CGHS OM 03.10.2025 percentages).
+
+    Unknown hospital grade: the highest rate that could apply (super speciality for procedures, NABH for tests),
+    so an unknown never makes a fair bill look overcharged.
+    """
+    from app.services.reference.tariffs import cghs_rules
+
+    rules = cghs_rules()
+    rate, notes = Decimal(row.rate), []
+    if row.city_tier in rules["city_tier_factor"] and tier in rules["city_tier_factor"] and row.city_tier != tier:
+        f = _d(rules["city_tier_factor"][tier]) / _d(rules["city_tier_factor"][row.city_tier])
+        rate *= f
+        notes.append(f"{tier.replace('_', ' ')} city ×{f.normalize()}")
+    if not row.ward_uniform and row.ward_type in rules["ward_factor"]:
+        # unknown ward: the private-ward rate, the highest that could apply
+        target: str = ward if ward and ward in rules["ward_factor"] else "private"
+        if target != row.ward_type:
+            f = _d(rules["ward_factor"][target]) / _d(rules["ward_factor"][row.ward_type])
+            rate *= f
+            notes.append(f"{target.replace('_', ' ')} ward ×{f.quantize(Decimal('0.001')).normalize()}"
+                         + ("" if ward in rules["ward_factor"] else " (ward not known: highest rate used)"))
+    wanted = grade or ("super_speciality" if row.kind in ("procedure", "cancer_procedure") else "nabh")
+    if row.nabh is not None and wanted != row.grade:    # only lists that state the grade they are for
+        f = _d(rules["grade_factor"][wanted]) / _d(rules["grade_factor"][row.grade])
+        rate *= f
+        notes.append(f"{wanted.replace('_', ' ')} hospital ×{f.quantize(Decimal('0.001')).normalize()}"
+                     + ("" if grade else " (hospital grade not known: highest rate used)"))
+    return rate.quantize(Decimal("0.01")), notes
+
+
+def _pick(ctx: ClaimContext, rows: list[TariffRef], on, how: str) -> Bench | None:
+    """Of the rows for one item, the one for this claim's tier and ward, or a CGHS row adjusted to them."""
     tier = ctx.city_tier or "tier_1"     # unknown tier: use the highest rates, so nothing is flagged unfairly
     ward = ctx.ward
-    best = None
-    for t in ctx.ref.tariffs:
-        if norm(t.name) not in names or not t.in_force(on):
+    rows = [t for t in rows if t.in_force(on)]
+    exact = [t for t in rows if t.city_tier in (tier, "any") and (t.ward_type == "any" or not ward
+                                                                  or t.ward_type == ward or t.ward_uniform)]
+    if exact:
+        best = next((t for t in exact if t.city_tier == tier), exact[0])
+        if best.source != "cghs":
+            return Bench(best, Decimal(best.rate), how, [])
+        rate, notes = _cghs_rate(best, tier, ward, _hospital_grade(ctx))
+        return Bench(best, rate, how, notes)
+    cghs = [t for t in rows if t.source == "cghs"]
+    if not cghs:
+        return None
+    rate, notes = _cghs_rate(cghs[0], tier, ward, _hospital_grade(ctx))
+    return Bench(cghs[0], rate, how, notes)
+
+
+def benchmark(ctx: ClaimContext, line: Line) -> Bench | None:
+    """The benchmark rate for a bill line: a confirmed mapping, then the same wording, then close wording."""
+    from app.rules.tariff_match import core, line_kinds
+
+    on = line.day or (ctx.admission.date() if ctx.admission else None)
+    tariffs = ctx.ref.tariffs
+    code = ctx.ref.tariff_mappings.get(core(line.description))
+    if code:
+        rows = [t for t in tariffs if t.code == code]
+        if rows:
+            return _pick(ctx, rows, on, "confirmed mapping")
+    names = set(_candidates(ctx, line))
+    same = [t for t in tariffs if norm(t.name) in names]
+    if same:
+        picked = _pick(ctx, same, on, "same wording")
+        if picked:
+            return picked
+    kinds = line_kinds(line.category.value, cancer=_cancer(ctx))
+    if kinds is None:
+        return None
+    text = line.description + (" inpatient" if line.category == BillCategory.CONSULTATION else "")
+    min_score = float(ctx.config_of("B-03").get("min_match_score", 0.6))
+    # an agreed tariff (the client's own, PM-JAY) before CGHS, which is only a government reference rate
+    agreed = {t.source for t in tariffs} - {"cghs"}
+    for groups in ([agreed, {"cghs"}] if agreed else [{"cghs"}]):
+        match = ctx.ref.tariff_matcher.best(text, kinds, min_score, groups=groups)
+        if match is None:
             continue
-        if t.city_tier not in (tier, "any") or (t.ward_type != "any" and ward and t.ward_type != ward):
-            continue
-        if best is None or (t.city_tier == tier and best.city_tier != tier):
-            best = t
-    return best
+        item = ctx.ref.tariff_at(match.key)
+        picked = _pick(ctx, [t for t in tariffs if t.code == item.code and t.source == item.source], on, match.how)
+        if picked:
+            return picked
+    return None
 
 
 @check("B-03")
@@ -168,25 +262,34 @@ def rates_vs_benchmark(ctx: ClaimContext) -> Result:
         return not_evaluable("No tariff or benchmark rates loaded.")
     cfg = ctx.config_of("B-03")
     skip = set(cfg.get("skip_categories", []))
-    over = _d(cfg.get("over_benchmark_pct", 25)) / 100
+    over_agreed = _d(cfg.get("over_benchmark_pct", 25)) / 100
+    over_cghs = _d(cfg.get("over_cghs_pct", 150)) / 100
     flags, compared = [], 0
     for line in ctx.bill_lines:
         if line.category.value in skip or line.rate is None or not line_ok(ctx, line):
             continue
-        ref = benchmark(ctx, line)
-        if ref is None:
+        bench = benchmark(ctx, line)
+        if bench is None or not bench.rate:
             continue
         compared += 1
-        if line.rate <= ref.rate * (1 + over):
+        ref = bench.ref
+        cghs = ref.source == "cghs"
+        if line.rate <= bench.rate * (1 + (over_cghs if cghs else over_agreed)):
             continue
-        excess = ((line.rate - ref.rate) * (line.qty or 1)).quantize(Decimal("0.01"))
-        pct = (line.rate / ref.rate - 1) * 100 if ref.rate else Decimal(0)
+        excess = ((line.rate - bench.rate) * (line.qty or 1)).quantize(Decimal("0.01"))
+        pct = (line.rate / bench.rate - 1) * 100
+        source = {"cghs": "CGHS", "pmjay": "PM-JAY"}.get(ref.source, "tariff")
+        adjusted = f", adjusted for {', '.join(bench.adjustments)}" if bench.adjustments else ""
         flags.append(Flag(
             f"Rate above benchmark: {line.description}",
-            f"Billed at {rs(line.rate)}; the benchmark ({ref.code}, {ref.city_tier.replace('_', ' ')}) is "
-            f"{rs(ref.rate)}: {pct:.0f}% higher.",
+            f"Billed at {rs(line.rate)}; the {source} benchmark {ref.code} '{ref.name[:80]}' (matched by "
+            f"{bench.how}{adjusted}) is {rs(bench.rate)}: {pct:.0f}% higher. "
+            + ("CGHS is a government reference rate and private hospitals usually charge more: check the rate "
+               "agreed with this hospital before deducting anything." if cghs else
+               "Check the item is the same before deducting."),
             [ctx.ev(line.doc, line.values.get("rate") or line.main, f"{line.description}: {rs(line.rate)}")],
-            amount_at_stake=excess, suggested_deduction=excess, key=f"{line.description}|{line.rate}"))
+            amount_at_stake=excess, suggested_deduction=None if cghs else excess,
+            key=f"{line.description}|{line.rate}"))
     if not compared:
         return not_evaluable("No billed item matched a benchmark rate.")
     return flagged(*flags, detail=f"{compared} line(s) compared with benchmark rates.")

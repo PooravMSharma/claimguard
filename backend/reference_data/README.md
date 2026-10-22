@@ -32,6 +32,18 @@ force on their admission date.
 
 Check what is loaded: `python -m app.cli reference-status`
 
+The CGHS download from cghs.mohfw.gov.in (one row per item: `Procedure Name`, `Speciality Classification`,
+`Tier`, `Facility`, `Ward`, `Cghs Code No.`, `Rate (₹)`) loads as is. Rates written "38740+GST" load as the base
+rate, "(Inclusive of GST)" as printed, and "Unlisted" rows are skipped; the import notes give the counts.
+
+### Bill wording links
+
+Hospitals name items their own way ("Hb%", "KFT"). The rate check matches wording to tariff items itself (see
+`docs/step-13-benchmarks.md`); a confirmed link always wins. To confirm links: run
+`python -m app.cli tariff-match-report --out storage/tariff_matches.csv`, correct the `Tariff code` column
+(blank = leave unmatched), and load the file as **Bill wording links** on Reference data (or
+`python -m app.cli import-tariff-mappings --file ... --version ... --source-name ...`).
+
 ## Limits to know
 
 - ICD-10-CM is the US clinical modification. Indian hospitals code in WHO

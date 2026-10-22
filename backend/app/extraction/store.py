@@ -48,6 +48,7 @@ CATEGORY_WORDS = [
     (BillCategory.ANAESTHESIA, ("anaesthetist", "anesthetist", "anaesthesia")),
     (BillCategory.OT_CHARGES, ("operation theatre", "ot charges", "theatre")),
     (BillCategory.CONSULTATION, ("consultant", "consultation", "doctor visit", "visit charges")),
+    (BillCategory.PROCEDURE, ("procedure charge", "minor procedure", "nebulis", "nebuliz", "dressing charge")),
     (BillCategory.IMPLANT, ("implant", "stent", "nail", "plate", "iol", "prosthesis")),
     (BillCategory.PHARMACY, ("pharmacy", "medicines", "drugs")),
     (BillCategory.CONSUMABLES, ("consumable", "cannula", "syringe", "infusion set", "gloves", "catheter")),

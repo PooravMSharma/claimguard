@@ -51,8 +51,11 @@ def parse_amount(text: str | None) -> Decimal | None:
     found = AMOUNT_RE.findall(cleaned.replace(" ", " "))
     if not found:
         return None
+    digits = found[-1].replace(",", "")
+    if re.match(r"0\d", digits):
+        return None          # "00,000": the leading digit was lost on a scan ("§00,000" for "5,00,000")
     try:
-        return Decimal(found[-1].replace(",", "")).quantize(Decimal("0.01"))
+        return Decimal(digits).quantize(Decimal("0.01"))
     except InvalidOperation:
         return None
 

@@ -7,6 +7,7 @@ const NAV: { to: string; label: string; permission: string }[] = [
   { to: "/claims", label: "Claim queue", permission: "claims.view" },
   { to: "/upload", label: "Upload claim", permission: "claims.upload" },
   { to: "/reference", label: "Reference data", permission: "reference.view" },
+  { to: "/admin/rules", label: "Rule library", permission: "rules.view" },
   { to: "/admin/users", label: "Users", permission: "users.manage" },
   { to: "/admin/audit", label: "Audit log", permission: "audit.view" },
   { to: "/status", label: "System status", permission: "system.view" },

@@ -1809,3 +1809,156 @@ label.block textarea {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* ---------- Step 12: rule library, settings editors, reference imports ---------- */
+
+.rules-table td code {
+  font-weight: 600;
+}
+
+.rules-table td:first-child {
+  min-width: 300px;
+}
+
+.rule-status {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.rule-active,
+.rule-clinician_reviewed {
+  background: var(--ok-bg);
+  border-color: transparent;
+  color: var(--ok);
+}
+
+.rule-draft {
+  background: #fff4e5;
+  border-color: transparent;
+  color: #9a5b00;
+}
+
+.rule-disabled {
+  text-decoration: line-through;
+}
+
+.rule-form .form-grid,
+.import-form .form-grid {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  margin: 10px 0;
+}
+
+.rule-form label,
+.import-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.sub-title {
+  font-size: 15px;
+  margin: 18px 0 8px;
+}
+
+.value-group {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0 14px;
+}
+
+.value-field {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  font-size: 14px;
+}
+
+.value-field > span {
+  padding-top: 6px;
+  text-transform: capitalize;
+}
+
+.value-field .tag {
+  text-transform: none;
+}
+
+.value-field textarea,
+.value-field input:not([type="checkbox"]) {
+  width: 100%;
+  max-width: 520px;
+}
+
+.value-field .num-input {
+  width: 140px;
+}
+
+.value-field .value-group {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.value-map {
+  display: grid;
+  gap: 6px;
+}
+
+.value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.value-row input[type="number"] {
+  width: 100px;
+}
+
+.value-key {
+  min-width: 140px;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
+
+.json-text {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.json-text.invalid {
+  border-color: var(--bad);
+}
+
+.value-read {
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.term-editor {
+  padding: 6px 0;
+}
+
+.import-form {
+  margin-top: 18px;
+}
+
+@media (max-width: 760px) {
+  .value-field {
+    grid-template-columns: 1fr;
+  }
+}

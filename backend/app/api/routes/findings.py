@@ -1,4 +1,4 @@
-"""Findings raised by the checks, their reviews, every check's run status, and the rules list."""
+"""Findings raised by the checks, their reviews, and every check's run status."""
 
 import uuid
 from decimal import Decimal
@@ -13,7 +13,7 @@ from app.core.permissions import Permission, has_permission
 from app.db.session import get_db
 from app.models.claim import Claim
 from app.models.enums import ClaimStatus, ReviewAction
-from app.models.rules import CheckRun, Finding, FindingReview, Rule
+from app.models.rules import CheckRun, Finding, FindingReview
 from app.models.user import User
 from app.review.scoring import latest_status
 from app.rules.catalogue import CHECKS, SEVERITY_ORDER
@@ -27,12 +27,10 @@ from app.schemas.findings import (
     ReviewIn,
     ReviewOut,
 )
-from app.schemas.findings import RuleOut as RuleSchema
 from app.services.audit import log_event
 
 router = APIRouter(tags=["findings"])
 can_view = require_permission(Permission.CLAIMS_VIEW)
-can_view_rules = require_permission(Permission.RULES_VIEW)
 LAYER_ORDER = ["completeness", "forensics", "consistency", "medical", "billing", "policy", "registry"]
 
 
@@ -153,15 +151,3 @@ def run_checks(claim_id: uuid.UUID, request: Request, db: Session = Depends(get_
               details={**counts, "via": "manual re-run"})
     db.commit()
     return checks(claim_id, db, user)
-
-
-@router.get("/rules", response_model=list[RuleSchema])
-def rules(db: Session = Depends(get_db), _: User = Depends(can_view_rules)) -> list[RuleSchema]:
-    from app.rules.store import sync_rules
-
-    sync_rules(db)
-    db.commit()
-    return [RuleSchema(id=r.id, name=r.name, layer=r.layer.value, method=r.method.value,
-                       max_severity=r.max_severity.value, weight=r.weight, status=r.status.value, version=r.version,
-                       config=r.config or {})
-            for r in db.scalars(select(Rule).order_by(Rule.id))]

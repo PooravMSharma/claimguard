@@ -18,6 +18,7 @@ from app.models.reference import (
     PolicyTerm,
     ReferenceImport,
     RegistryHospital,
+    TariffMapping,
     TariffRate,
 )
 from app.models.user import User
@@ -46,6 +47,7 @@ can_view = require_permission(Permission.REFERENCE_VIEW)
 DATASETS = [
     ("packages", "PM-JAY packages", Package),
     ("tariffs", "Tariff rates (CGHS)", TariffRate),
+    ("tariff_mappings", "Bill wording links", TariffMapping),
     ("non_payables", "IRDAI non-payable items", NonPayableItem),
     ("icd10", "ICD-10 codes", Icd10Code),
     ("policy_terms", "Policy terms", PolicyTerm),

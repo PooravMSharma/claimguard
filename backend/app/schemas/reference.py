@@ -153,3 +153,9 @@ class Page(BaseModel, Generic[T]):
     total: int
     limit: int
     offset: int
+
+
+class PolicyTermUpdate(BaseModel):
+    product_code: str = Field(default="STANDARD", max_length=64)
+    value: dict
+    reason: str = Field(min_length=1, max_length=2000)

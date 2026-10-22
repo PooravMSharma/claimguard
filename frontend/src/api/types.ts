@@ -634,3 +634,58 @@ export const CHECK_STATUS_LABELS: Record<CheckStatus, string> = {
   error: "Error",
   not_run: "Not run",
 };
+
+// ---------- Step 12: rule library ----------
+
+export type RuleStatus = "draft" | "clinician_reviewed" | "active" | "disabled";
+
+export const RULE_STATUS_LABELS: Record<RuleStatus, string> = {
+  draft: "Draft (amber, needs medical review)",
+  clinician_reviewed: "Clinician-reviewed",
+  active: "Active",
+  disabled: "Disabled",
+};
+
+export interface RuleStats {
+  days: number;
+  findings: number;
+  reviewed: number;
+  confirmed: number;
+  dismissed: number;
+  dismissal_rate: number | null;
+  needs_retuning: boolean;
+}
+
+export interface RuleRow {
+  id: string;
+  name: string;
+  layer: string;
+  method: string;
+  max_severity: Severity;
+  designed_max_severity: Severity;
+  weight: number;
+  status: RuleStatus;
+  allowed_statuses: RuleStatus[];
+  version: number;
+  config: Record<string, unknown>;
+  default_config: Record<string, unknown>;
+  source_title: string | null;
+  source_url: string | null;
+  updated_at: string | null;
+  stats: RuleStats;
+}
+
+export interface RuleChangeRow {
+  version: number;
+  changes: Record<string, [unknown, unknown]>;
+  reason: string;
+  clinician: string | null;
+  changed_by: string | null;
+  created_at: string;
+}
+
+export interface RuleDetail extends RuleRow {
+  description: string;
+  history: RuleChangeRow[];
+  dismissals: { claim_number: string; reason: string; created_at: string }[];
+}
