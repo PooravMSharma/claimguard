@@ -6,18 +6,26 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+.ruff_cache/
 
 # Node
 node_modules/
 dist/
 
-# Local data
+# Local data (claim files, generated claims, backups hold patient data)
 data/
 storage/
 synthetic_data/
+backups/
+demo/
+
+# Run output
+*.log
+checks.txt
+misses.txt
 
 # Editors / OS
 .vscode/
 .idea/
 .DS_Store
-Thumbs.dbdemo/
+Thumbs.db

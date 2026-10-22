@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """All configuration comes from environment variables (see .env.example)."""
+    """All configuration comes from environment variables (see env.example in the repo root)."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     ai_model: str = "claude-sonnet-5-5"
     ai_extraction: str = "gaps"          # off | gaps (scans and incomplete documents) | all
     ai_checks: bool = True               # AI judgement checks (M-01, M-02, M-04, M-06, X-08, B-11 + AI parts)
+    # Outside development an external provider (anthropic) is refused unless this is true: set it only with the
+    # client's written approval and a DPDP Act check (app/core/hardening.py)
+    allow_external_ai: bool = False
 
     # Review deadlines (IRDAI Master Circular on Health Insurance, 2024); see app/review/sla.py
     sla_cashless_hours: int = 3

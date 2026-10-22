@@ -341,7 +341,20 @@ export default function FindingsView({ claimId, canReview, canSettleMedical, loc
   if (error && !data) return <p className="error-text" role="alert">{error}</p>;
   if (!data || !checks) return <p className="muted">Loading…</p>;
   if (!checks.ran_at) {
-    return <p className="muted card">Checks have not run on this claim yet. They run when processing finishes.</p>;
+    // A claim processed before the checks existed, or whose checks step failed, has a record but no findings
+    return (
+      <div className="card">
+        <p className="muted">Checks have not run on this claim yet. They run when processing finishes.</p>
+        {canReview && !locked && (
+          <>
+            {error && <p className="error-text" role="alert">{error}</p>}
+            <button className="button" onClick={rerun} disabled={busy}>
+              {busy ? "Running…" : "Run checks now"}
+            </button>
+          </>
+        )}
+      </div>
+    );
   }
 
   const s = data.summary;

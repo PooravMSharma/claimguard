@@ -251,6 +251,13 @@ def get_check_provider() -> AIProvider | None:
 
 
 def _configured() -> AIProvider | None:
+    from app.core.hardening import external_ai_blocked
+
     s = get_settings()
+    if external_ai_blocked(s):
+        # second line of defence: the API and worker refuse to start like this, but a CLI command could not
+        log.error("AI provider %r is not allowed outside development without ALLOW_EXTERNAL_AI=true; rules only",
+                  s.ai_provider)
+        return None
     return _provider(s.ai_provider.strip().lower(), s.ai_api_key.strip(), s.ai_model.strip(), s.ai_timeout_seconds,
                      s.ai_base_url.strip(), s.ai_vision, s.ai_context_tokens, s.ai_keep_alive)

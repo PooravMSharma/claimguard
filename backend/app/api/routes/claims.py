@@ -1,6 +1,7 @@
 """Claims: upload, queue, detail, page images, original files, reprocessing."""
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
@@ -14,7 +15,7 @@ from app.db.session import get_db
 from app.models.claim import Claim, ClaimDocument, DocumentPage
 from app.models.decision import Decision
 from app.models.enums import ClaimStage, ClaimStatus, RiskBand
-from app.models.user import User
+from app.models.user import AuditLog, User
 from app.schemas.claims import (
     ClaimDetail,
     ClaimPage,
@@ -215,9 +216,22 @@ def _order(sort: str) -> list:
     return [waiting, band, Claim.risk_score.desc().nulls_last(), Claim.sla_due_at.asc().nulls_last(), *newest]
 
 
+VIEW_LOG_EVERY = timedelta(minutes=30)
+
+
 @router.get("/{claim_id}", response_model=ClaimDetail)
-def get_claim(claim_id: uuid.UUID, db: Session = Depends(get_db), _: User = Depends(can_view)) -> ClaimDetail:
-    return _detail(db, claim_id)
+def get_claim(claim_id: uuid.UUID, request: Request, db: Session = Depends(get_db),
+              user: User = Depends(can_view)) -> ClaimDetail:
+    detail = _detail(db, claim_id)
+    # Who opened which patient's claim (DPDP access trail). The screen re-reads the claim while it is processing,
+    # so one entry per user and claim every 30 minutes, not one per request.
+    recent = db.scalar(select(AuditLog.id).where(
+        AuditLog.action == "claim.viewed", AuditLog.entity_id == str(claim_id), AuditLog.user_id == user.id,
+        AuditLog.at > datetime.now(timezone.utc) - VIEW_LOG_EVERY).limit(1))
+    if recent is None:
+        log_event(db, "claim.viewed", entity_type="claim", entity_id=claim_id, user_id=user.id, request=request)
+        db.commit()
+    return detail
 
 
 @router.get("/{claim_id}/pages/{page_id}/image")

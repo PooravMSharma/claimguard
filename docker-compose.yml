@@ -32,6 +32,7 @@ services:
 
   backend:
     build: ./backend
+    user: root          # development only: existing volumes were created as root (production runs as "app")
     env_file: .env
     environment:
       WATCHFILES_FORCE_POLLING: "true"
@@ -49,6 +50,7 @@ services:
 
   worker:
     build: ./backend
+    user: root          # development only: existing volumes were created as root (production runs as "app")
     env_file: .env
     command: python -m app.worker.run
     volumes:

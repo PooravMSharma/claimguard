@@ -5,7 +5,7 @@ billing and policy checks, and gives the adjudicator a risk score with evidence.
 
 ## Run locally
 
-1. Copy `.env.example` to `.env`.
+1. Copy `env.example` to `.env`.
 2. `docker compose up --build`
 3. Open http://localhost:5174 (dashboard) and http://localhost:8001/docs (API).
 
@@ -31,3 +31,8 @@ CGHS rates and PM-JAY packages are loaded from the official files. See
 ## Tests
 
 `docker compose exec backend pytest`
+
+## Production
+
+`docker compose -f docker-compose.prod.yml up -d --build`, behind HTTPS. Settings, backups and the
+checklist: `docs/step-14-hardening.md`.

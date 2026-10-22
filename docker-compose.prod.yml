@@ -1,0 +1,78 @@
+# Production: docker compose -f docker-compose.prod.yml up -d --build
+# Differences from docker-compose.yml (development): no code mounted from the host, no auto-reload, the dashboard
+# built and served by nginx, Postgres and Redis not reachable from outside, everything restarts on failure.
+# Needs a .env with APP_ENV=production and strong secrets (see env.example and docs/step-14-hardening.md).
+name: claimguard-prod
+
+x-app: &app
+  build: ./backend
+  env_file: .env
+  environment:
+    APP_ENV: production
+    STORAGE_LOCAL_PATH: /data/storage
+  volumes:
+    - storage_prod:/data/storage
+  extra_hosts:
+    - "host.docker.internal:host-gateway"   # Ollama on the same server
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes     # queued claims survive a restart
+    volumes:
+      - redis_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    <<: *app
+    # --no-access-log: uvicorn's log line includes query strings (names searched in the queue); the app logs
+    # method, path, status and request id instead. --proxy-headers: client IPs in the audit log come from nginx.
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+      --proxy-headers --forwarded-allow-ips='*' --no-access-log"
+
+  worker:
+    <<: *app
+    command: python -m app.worker.run
+    healthcheck:
+      disable: true
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_prod:
+  redis_prod:
+  storage_prod:

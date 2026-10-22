@@ -36,7 +36,8 @@ backend/
     api/routes/    auth, users, audit, health, reference (read), reference_admin (file imports, policy-term
                    edits), claims (queue), record, findings, review (summary, assign, decisions, query letter),
                    rules (rule library)
-    core/          config (Settings from .env), security, logging
+    core/          config (Settings from .env), security, logging, hardening (production settings guard),
+                   middleware (headers, request ids, safe 500s)
     db/            session
     extraction/    claim record: values (parsing), layout (lines/labels/tables), documents (per-type
                    rules), ai_extract (AI reader + merge), store (save/keep corrections), evaluate
@@ -51,11 +52,12 @@ backend/
     review/        Step 11: scoring.py (risk score / band / suggested payable), sla.py (IRDAI deadlines),
                    letters.py (query letter draft)
     schemas/       pydantic API schemas
-    services/      intake, storage (local/S3), queue, audit, users, login_guard, reference importers
+    services/      intake, storage (local/S3), queue, audit, users, login_guard, reference importers,
+                   recovery (claims left by a stopped worker)
     synthetic/     synthetic claim generator (ground truth for every check)
     worker/        RQ entry point and jobs
     cli.py         admin commands (see below)
-  migrations/versions/   0001..0009 (Alembic)
+  migrations/versions/   0001..0010 (Alembic)
   reference_data/        bundled defaults; raw/ holds official files (CGHS, HBP) when supplied
   tests/
 frontend/src/
@@ -80,6 +82,8 @@ docker compose restart backend worker        # pick up code/.env changes
 docker compose logs -f worker | grep -E "claim CG|HTTP Request|failed"   # follow processing
 
 docker compose exec backend pytest           # full test suite (expected: all pass)
+scripts/backup.sh [-f docker-compose.prod.yml] [dir]     # database + claim files; scripts/restore.sh <folder>
+docker compose -f docker-compose.prod.yml up -d --build  # production (see docs/step-14-hardening.md)
 
 # CLI: docker compose exec backend python -m app.cli <command>
 create-admin --email you@company.in --name "Your Name"
@@ -98,6 +102,7 @@ ai-check                                     # one test request to the configure
 run-checks --synthetic | --claim CG-... [--no-ai] [--limit N]   # re-run checks on stored records (no re-reading)
 evaluate-checks [--misses N]                 # findings vs ground truth: recall, precision, false reds, band
 rescore                                      # risk score / band / payable from stored findings (no re-run)
+recover-stuck                                # mark claims left "processing" by a stopped worker as failed
 
 # Synthetic data (deterministic, seed 42): writes backend/synthetic_data/ (gitignored)
 docker compose exec backend python -m app.synthetic --count 300
@@ -105,7 +110,7 @@ docker compose exec backend python -m app.synthetic --count 300
 
 ## Configuration (.env)
 
-`.env` is never committed. `.env.example` holds the base keys, and the defaults for the rest live in
+`.env` is never committed. `env.example` (repo root) holds the base keys, and the defaults for the rest live in
 `backend/app/core/config.py`. AI settings used in development:
 
 ```
@@ -162,7 +167,14 @@ Build plan: 14 steps.
   (tariff_mappings, migration 0010). Fresh seed 2026: clean 300 recall 100% / precision 100%, 0 red on genuine
   (also with real CGHS loaded); fixes: M-05 seeder, "0..." amounts from OCR treated as unread, "Procedure
   charges" lines are the procedure category.
-- **Next: Step 14, hardening.**
+- Step 14 (docs/step-14-hardening.md): API and worker refuse to start outside development with unsafe settings
+  (weak secret / DB password, open CORS, external AI without ALLOW_EXTERNAL_AI); security headers, request IDs,
+  generic 500 with a reference; abandoned claims marked failed at worker start (`recover-stuck`); "Run checks now"
+  when checks never ran; `claim.viewed` audit (once per user/claim per 30 min); docker-compose.prod.yml (nginx
+  serving the built dashboard, non-root backend, no exposed Postgres/Redis); scripts/backup.sh and restore.sh;
+  CI (.github/workflows/ci.yml); pyright 0 errors.
+- **The 14-step build plan is complete.** Open items: the client's data (below), HTTPS/domain, off-site backups,
+  the DPDP review (retention period), and re-measuring the AI checks with Ollama on more claims.
 - Still pending from the client: the PM-JAY HBP 2022 package list, and the insurer's own agreed hospital tariffs
   (until then rates are compared with CGHS, a government reference rate).
 
@@ -176,7 +188,7 @@ Build plan: 14 steps.
   - Values from either source go through `documents.normalize()` so they have the same shape.
 - **Reviewer corrections survive reprocessing** (`extraction/store.py` keeps them). Never overwrite them.
 - **Audit everything that changes state:** `services/audit.log_event(...)`.
-- **Schema changes = a new Alembic migration** in `migrations/versions/` (next is `0010_...`). Never edit an
+- **Schema changes = a new Alembic migration** in `migrations/versions/` (next is `0011_...`). Never edit an
   applied migration.
 - **Checks:** one function per check in `app/rules/checks/<layer>.py`, registered with `@check("B-01")`.
   Thresholds live in `rules.config` (defaults in `rules/defaults.py`), never in the check. A check returns
@@ -198,7 +210,7 @@ Build plan: 14 steps.
   AI findings carry `model_version` and are amber at most.
 - **Style:**
   - Ruff, line length 120.
-  - Pyright: 0 errors expected.
+  - Pyright: 0 errors (backend/pyrightconfig.json); ruff settings in backend/ruff.toml. CI runs both + pytest.
   - Plain, specific docstrings that explain *why*.
 - **Synthetic data is fictional.** Names, hospitals and brands are invented (brands marked "(fictional)").
 

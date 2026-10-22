@@ -432,6 +432,7 @@ def main(argv: list[str] | None = None) -> None:
     ec = sub.add_parser("evaluate-checks", help="Score the checks against the synthetic answers")
     ec.add_argument("--folder", type=Path, default=Path(__file__).resolve().parents[1] / "synthetic_data")
     ec.add_argument("--misses", type=int, default=0, help="Show up to N examples of missed and extra flags")
+    sub.add_parser("recover-stuck", help="Mark claims left 'processing' by a stopped worker as failed")
     tm = sub.add_parser("tariff-match-report",
                         help="CSV of bill wordings and the tariff item each is compared with, to confirm")
     tm.add_argument("--out", type=Path, default=Path("tariff_matches.csv"))
@@ -450,6 +451,14 @@ def main(argv: list[str] | None = None) -> None:
             default_tier=CityTier(args.city_tier), default_ward=WardType(args.ward))])
     elif args.command == "import-tariff-mappings":
         _run_import(lambda db: [importers.import_tariff_mappings(db, args.file, _source_info(args), sheet=args.sheet)])
+    elif args.command == "recover-stuck":
+        from app.services.recovery import recover_stuck
+
+        with SessionLocal() as db:
+            recovered = recover_stuck(db)
+            db.commit()
+        print(f"Marked {len(recovered)} claim(s) failed: {', '.join(recovered)}" if recovered
+              else "No abandoned claims.")
     elif args.command == "tariff-match-report":
         tariff_match_report_cmd(args.out, args.limit)
     elif args.command == "reference-status":

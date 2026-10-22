@@ -90,7 +90,7 @@ def classify(text: str, previous: T | None = None) -> Classification:
         return Classification(T.UNKNOWN, 0.0, ["no text"])
     ranked = sorted(score_page(text).items(), key=lambda kv: kv[1][0], reverse=True)
     if not ranked or ranked[0][1][0] < MIN_SCORE:
-        if previous in CONTINUES:
+        if previous is not None and previous in CONTINUES:
             return Classification(previous, 0.45, [f"continuation of {previous.value}"])
         return Classification(T.UNKNOWN, 0.0, ["no clear signal"])
     top_type, (top, hits) = ranked[0]
