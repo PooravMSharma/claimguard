@@ -100,7 +100,7 @@ class _Doc:
             left = pairs[i]
             right = pairs[i + 1] if i + 1 < len(pairs) else ("", "")
             rows.append([left[0], Paragraph(str(left[1]), BODY), right[0], Paragraph(str(right[1]), BODY)])
-            t = Table(rows, colWidths=[41 * mm, 49 * mm, 41 * mm, 49 * mm])   # labels up to ~38 mm must fit
+        t = Table(rows, colWidths=[41 * mm, 49 * mm, 41 * mm, 49 * mm])   # labels up to ~38 mm must fit
         t.setStyle(KV)
         self.story += [t, Spacer(1, 4)]
 

@@ -4,7 +4,6 @@ import { BrowserRouter } from "react-router-dom";
 
 import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
-// @ts-expect-error CSS imports are handled by the bundler.
 import "./styles.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
